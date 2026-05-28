@@ -1,0 +1,79 @@
+/* ================================================================
+   MagdalenaTrace — Variables de marca USM
+   Manual de Marca: Institución Universitaria de Santa Marta
+   ================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* Colores primarios USM */
+  --usm-blue:       #1C5DA9;
+  --usm-sky:        #93D3F5;
+  --usm-teal:       #63C2CA;
+
+  /* Colores secundarios USM */
+  --usm-green:      #38AB3F;
+  --usm-teal-dark:  #058389;
+  --usm-navy:       #1E3256;
+  --usm-blue-mid:   #219BD6;
+  --usm-blue-pale:  #CDE9F6;
+  --usm-deco:       #D9E2F0;
+
+  /* Sistema */
+  --whatsapp:       #25D366;
+  --whatsapp-dark:  #075E54;
+  --whatsapp-chat:  #E5DDD5;
+  --whatsapp-bubble:#DCF8C6;
+  --white:          #FFFFFF;
+  --text-primary:   #1E3256;
+  --text-body:      #374151;
+  --bg-light:       #F5F7FA;
+
+  /* Tipografía — sustituto web de Helvetica Neue */
+  --font-main: 'Montserrat', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-main);
+  color: var(--text-body);
+  background: var(--bg-light);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { color: var(--usm-navy); font-weight: 700; }
+a { color: var(--usm-blue); text-decoration: none; }
+a:hover { color: var(--usm-teal-dark); }
+
+/* Botones estándar USM */
+.btn-primary {
+  background: var(--usm-blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:hover { background: var(--usm-navy); }
+
+.btn-secondary {
+  background: var(--usm-teal);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-secondary:hover { background: var(--usm-teal-dark); }
+
+/* Badges de certificación */
+.badge-fairtrade    { background: #38AB3F; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-rainforest   { background: #058389; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-bpa          { background: #219BD6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-vencida      { background: #9CA3AF; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
