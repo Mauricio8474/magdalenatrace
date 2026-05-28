@@ -13,6 +13,8 @@ from models import Lote, CTE, Certificacion, Experiencia, OperadorTuristico, Usu
 from schemas import LotePublicoResponse, LoteCatalogoItem, CrearCTERequest
 from auth import require_rol
 import json
+import io
+import base64
 
 router = APIRouter()
 
@@ -117,7 +119,8 @@ def crear_cte(
         if not productor or lote.productor_id != productor.id:
             raise HTTPException(status_code=403, detail="Este lote no te pertenece")
 
-    fecha = "2025-05-28" if body.fecha == "hoy" else body.fecha
+    from datetime import date
+    fecha = date.today().isoformat() if body.fecha == "hoy" else body.fecha
     cte = CTE(lote_id=lote_id, tipo=body.tipo, fecha=fecha,
               descripcion=body.descripcion, responsable_id=current_user.id,
               datos_json=json.dumps(body.datos_adicionales or {}))
@@ -126,3 +129,36 @@ def crear_cte(
     db.refresh(cte)
     return {"id": cte.id, "lote_id": lote_id, "tipo": cte.tipo,
             "fecha": cte.fecha, "descripcion": cte.descripcion}
+
+
+@router.get("/{lote_id}/qr", summary="Genera QR del lote como imagen base64")
+def get_lote_qr(lote_id: str, db: Session = Depends(get_db)):
+    """
+    Genera un código QR que apunta al pasaporte digital del lote en el frontend.
+    No requiere autenticación — se usa para imprimir etiquetas físicas.
+    """
+    lote = db.query(Lote).filter(Lote.id == lote_id).first()
+    if not lote:
+        raise HTTPException(status_code=404, detail=f"Lote {lote_id} no encontrado")
+
+    try:
+        import qrcode
+    except ImportError:
+        raise HTTPException(status_code=500, detail="qrcode no instalado. Ejecuta: pip install qrcode[pil]")
+
+    url = f"http://localhost:5173/lote/{lote_id}"
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#1E3256", back_color="white")
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    img_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+    return {
+        "lote_id": lote_id,
+        "qr_base64": img_base64,
+        "url": url,
+        "data_uri": f"data:image/png;base64,{img_base64}",
+    }
