@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Importar modelos ANTES de create_all para que SQLAlchemy los registre
+from models import Usuario, Productor, Lote, CTE, Certificacion, Exportador, OrdenCompra, OperadorTuristico, Experiencia, Turista
 from database import Base, engine, SessionLocal
+from routers import auth, lotes, exportadores, operadores, turistas, chatbot
 
 app = FastAPI(
     title="MagdalenaTrace API",
-    description="Trazabilidad digital para la cadena de valor agrícola y turística del Magdalena.",
+    description="Trazabilidad digital para la cadena de valor del Magdalena.",
     version="1.0.0",
 )
 
@@ -18,11 +22,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    # 1. Crear todas las tablas
+    # 1. Crear tablas (modelos ya importados arriba)
     Base.metadata.create_all(bind=engine)
-    
-    # 2. Cargar seed si la BD está vacía
-    from models import Usuario
+    print("✅ Tablas creadas")
+
+    # 2. Seed si BD vacía
     db = SessionLocal()
     try:
         count = db.query(Usuario).count()
@@ -30,20 +34,19 @@ def startup():
             print("🌱 BD vacía — cargando datos demo...")
             import seed
         else:
-            print(f"✅ BD ya tiene {count} usuarios, seed omitido.")
+            print(f"✅ BD tiene {count} usuarios — seed omitido")
     except Exception as e:
-        print(f"Error en startup: {e}")
+        print(f"❌ Error en seed: {e}")
     finally:
         db.close()
 
-# Routers — descomentar según estén implementados
-# from routers import auth, productores, lotes, exportadores, operadores, turistas, chatbot
-# app.include_router(auth.router,         prefix="/auth",         tags=["Autenticación"])
-# app.include_router(lotes.router,        prefix="/lotes",        tags=["Lotes"])
-# app.include_router(exportadores.router, prefix="/exportadores", tags=["Exportadores"])
-# app.include_router(operadores.router,   prefix="/operadores",   tags=["Operadores Turísticos"])
-# app.include_router(turistas.router,     prefix="/turistas",     tags=["Turistas"])
-# app.include_router(chatbot.router,      prefix="/chatbot",      tags=["Chatbot IA"])
+# Routers
+app.include_router(auth.router,         prefix="/auth",         tags=["Autenticación"])
+app.include_router(lotes.router,        prefix="/lotes",        tags=["Lotes"])
+app.include_router(exportadores.router, prefix="/exportadores", tags=["Exportadores"])
+app.include_router(operadores.router,   prefix="/operadores",   tags=["Operadores Turísticos"])
+app.include_router(turistas.router,     prefix="/turistas",     tags=["Turistas"])
+app.include_router(chatbot.router,      prefix="/chatbot",      tags=["Chatbot IA"])
 
 @app.get("/", tags=["Health"])
 def root():
