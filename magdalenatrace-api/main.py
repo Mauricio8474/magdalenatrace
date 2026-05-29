@@ -10,6 +10,23 @@ from database import Base, engine
 
 Base.metadata.create_all(bind=engine)
 
+# Correr seed automáticamente si la base de datos está vacía
+from database import SessionLocal
+from models import Usuario
+def run_seed_if_empty():
+    db = SessionLocal()
+    try:
+        count = db.query(Usuario).count()
+        if count == 0:
+            print("🌱 Base de datos vacía, cargando datos demo...")
+            import seed
+    except Exception as e:
+        print(f"Error en seed: {e}")
+    finally:
+        db.close()
+
+run_seed_if_empty()
+
 app = FastAPI(
     title="MagdalenaTrace API",
     description="Trazabilidad digital para la cadena de valor agrícola y turística del Magdalena.",
