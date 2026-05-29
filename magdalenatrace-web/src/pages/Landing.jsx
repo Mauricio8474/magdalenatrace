@@ -279,10 +279,10 @@ function HowItWorks() {
     {
       icon: '🌱',
       role: 'Productor',
-      accent: 'var(--verde-medio)',
-      desc: 'Los productores registran sus fincas, lotes y eventos de trazabilidad directamente desde WhatsApp — sin necesidad de cuenta web.',
+      accent: '#2AABEE',
+      desc: 'Los productores registran sus fincas, lotes y eventos de trazabilidad directamente desde Telegram — sin necesidad de cuenta web.',
       link: '/whatsapp',
-      badge: 'Vía WhatsApp',
+      badge: 'Vía Telegram',
     },
   ]
 

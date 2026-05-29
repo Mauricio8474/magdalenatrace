@@ -247,18 +247,18 @@ export default function Login() {
             { icon: '📊', role: 'Exportador',          desc: 'Accede al catálogo de lotes certificados' },
             { icon: '🗺️', role: 'Turista / Comprador', desc: 'Descubre el origen de lo que consumes' },
             { icon: '🏕️', role: 'Operador Turístico',  desc: 'Gestiona tus experiencias de agroturismo' },
-            { icon: '🌱', role: 'Productor',            desc: 'Vía WhatsApp — sin login web', whatsapp: true },
+            { icon: '✈️', role: 'Productor',            desc: 'Vía Telegram — sin login web', telegram: true },
           ].map(r => (
             <div key={r.role} style={{
               display: 'flex', alignItems: 'center', gap: 12,
-              background: r.whatsapp ? 'rgba(37,211,102,0.10)' : 'rgba(255,255,255,0.07)',
-              border: `1px solid ${r.whatsapp ? 'rgba(37,211,102,0.3)' : 'rgba(255,255,255,0.1)'}`,
+              background: r.telegram ? 'rgba(42,171,238,0.10)' : 'rgba(255,255,255,0.07)',
+              border: `1px solid ${r.telegram ? 'rgba(42,171,238,0.3)' : 'rgba(255,255,255,0.1)'}`,
               borderRadius: 10, padding: '10px 16px',
               marginBottom: 10, textAlign: 'left',
             }}>
               <span style={{ fontSize: 22, flexShrink: 0 }}>{r.icon}</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: r.whatsapp ? '#25D366' : '#D4A04A' }}>{r.role}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: r.telegram ? '#2AABEE' : '#D4A04A' }}>{r.role}</div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>{r.desc}</div>
               </div>
             </div>
