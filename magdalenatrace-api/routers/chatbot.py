@@ -107,7 +107,7 @@ def chatbot_mensaje(body: ChatbotRequest, db: Session = Depends(get_db)):
         messages.append({"role": "user", "content": body.mensaje})
 
         response = client.chat.completions.create(
-            model="llama3-70b-8192",
+            model="llama-3.3-70b-versatile",
             messages=messages,
             max_tokens=1024,
             temperature=0.4,
