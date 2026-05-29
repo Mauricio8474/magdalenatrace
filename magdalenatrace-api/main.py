@@ -93,6 +93,19 @@ app.include_router(chatbot.router,      prefix="/chatbot",      tags=["Chatbot I
 def root():
     return {"mensaje": "MagdalenaTrace API funcionando ✅", "docs": "/docs"}
 
+@app.get("/debug/env")
+def debug_env():
+    gemini = os.getenv("GEMINI_API_KEY", "")
+    telegram = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    return {
+        "GEMINI_API_KEY_exists": bool(gemini),
+        "GEMINI_API_KEY_len": len(gemini),
+        "GEMINI_API_KEY_prefix": gemini[:12] if gemini else "NONE",
+        "TELEGRAM_BOT_TOKEN_exists": bool(telegram),
+        "TELEGRAM_BOT_TOKEN_len": len(telegram),
+        "all_env_keys": sorted([k for k in os.environ.keys() if not k.startswith("_")]),
+    }
+
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok"}
