@@ -1,3 +1,6 @@
+import os
+import threading
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -63,6 +66,16 @@ def startup():
         print(f"❌ Error en seed: {e}")
     finally:
         db.close()
+
+    # 4. Bot de Telegram en thread daemon
+    if os.getenv("TELEGRAM_BOT_TOKEN"):
+        print("🤖 Iniciando bot de Telegram en thread secundario...")
+        from bot_telegram import run_bot
+        bot_thread = threading.Thread(target=run_bot, daemon=True, name="telegram-bot")
+        bot_thread.start()
+        print("✅ Bot de Telegram activo")
+    else:
+        print("⚠️  TELEGRAM_BOT_TOKEN no configurado — bot no iniciado")
 
 # Routers
 app.include_router(auth.router,         prefix="/auth",         tags=["Autenticación"])
