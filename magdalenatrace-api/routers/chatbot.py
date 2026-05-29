@@ -96,14 +96,15 @@ def _detectar_viz(texto: str, db: Session):
 
 @router.post("/mensaje", response_model=ChatbotResponse, summary="Chat con el asistente de MagdalenaTrace")
 def chatbot_mensaje(body: ChatbotRequest, db: Session = Depends(get_db)):
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    print(f"[CHATBOT] GEMINI_API_KEY len={len(api_key)} first={api_key[:8] if api_key else 'NONE'}", flush=True)
+    api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    prefix = api_key[:8] if api_key else "NONE"
+    print(f"[CHATBOT] GEMINI_API_KEY len={len(api_key)} prefix={prefix}", flush=True)
     if not api_key or api_key == "tu_api_key_aqui":
         return {
             "respuesta": (
-                "El asistente está en modo demo (API key no configurada). "
-                "Configura GEMINI_API_KEY en las variables de entorno. "
-                "Obtén una gratis en https://aistudio.google.com/apikey"
+                "El asistente está en modo demo. "
+                f"[DEBUG] GEMINI_API_KEY exists={bool(api_key)} len={len(api_key)} prefix={prefix}. "
+                "Configura GEMINI_API_KEY en Railway → Variables."
             ),
             "tipo_viz": "texto",
             "datos_viz": None,
