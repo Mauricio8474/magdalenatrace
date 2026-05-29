@@ -12,6 +12,10 @@ import os
 
 router = APIRouter()
 
+# Cachear la key al importar (Railway la pierde entre startup y request)
+GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
+print(f"[CHATBOT] 🔑 Cargando GEMINI_API_KEY en módulo: exists={bool(GEMINI_API_KEY)} len={len(GEMINI_API_KEY)} prefix={GEMINI_API_KEY[:8] or 'NONE'}", flush=True)
+
 SYSTEM_INSTRUCTION = """Eres el asistente oficial de MagdalenaTrace, una plataforma de trazabilidad agrícola de la Sierra Nevada de Santa Marta, Colombia.
 
 ## Dominio permitido
@@ -96,15 +100,13 @@ def _detectar_viz(texto: str, db: Session):
 
 @router.post("/mensaje", response_model=ChatbotResponse, summary="Chat con el asistente de MagdalenaTrace")
 def chatbot_mensaje(body: ChatbotRequest, db: Session = Depends(get_db)):
-    api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
-    prefix = api_key[:8] if api_key else "NONE"
-    print(f"[CHATBOT] GEMINI_API_KEY len={len(api_key)} prefix={prefix}", flush=True)
+    api_key = GEMINI_API_KEY
     if not api_key or api_key == "tu_api_key_aqui":
         return {
             "respuesta": (
                 "El asistente está en modo demo. "
-                f"[DEBUG] GEMINI_API_KEY exists={bool(api_key)} len={len(api_key)} prefix={prefix}. "
-                "Configura GEMINI_API_KEY en Railway → Variables."
+                f"[DEBUG] GEMINI_API_KEY exists={bool(api_key)} len={len(api_key)} prefix={api_key[:8] or 'NONE'}. "
+                "Configura GEMINI_API_KEY en Railway → Variables y redeploya."
             ),
             "tipo_viz": "texto",
             "datos_viz": None,
