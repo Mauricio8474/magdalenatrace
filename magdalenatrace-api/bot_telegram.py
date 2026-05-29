@@ -7,10 +7,10 @@ Flujo:
   Menú: cosecha, insumo, despacho, mis lotes, certificaciones, catálogo
 """
 import os
+import asyncio
 import logging
 import random
 from datetime import date
-from typing import Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -477,6 +477,9 @@ def run_bot():
         logger.error("TELEGRAM_BOT_TOKEN no configurado — bot no iniciado")
         return
 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", cmd_menu))
@@ -485,4 +488,7 @@ def run_bot():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Bot de Telegram iniciando polling...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
+    finally:
+        loop.close()
