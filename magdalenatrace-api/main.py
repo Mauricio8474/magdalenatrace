@@ -67,6 +67,10 @@ def startup():
     finally:
         db.close()
 
+    # Debug env vars
+    print(f"🔍 GEMINI_API_KEY exists={bool(os.getenv('GEMINI_API_KEY', ''))} len={len(os.getenv('GEMINI_API_KEY', ''))}")
+    print(f"🔍 TELEGRAM_BOT_TOKEN exists={bool(os.getenv('TELEGRAM_BOT_TOKEN', ''))}")
+
     # 4. Bot de Telegram en thread daemon
     if os.getenv("TELEGRAM_BOT_TOKEN"):
         print("🤖 Iniciando bot de Telegram en thread secundario...")
