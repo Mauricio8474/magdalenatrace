@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Importar modelos ANTES de create_all para que SQLAlchemy los registre
 from models import Usuario, Productor, Lote, CTE, Certificacion, Exportador, OrdenCompra, OperadorTuristico, Experiencia, Turista, Reserva
 from database import Base, engine, SessionLocal
-from routers import auth, lotes, exportadores, operadores, turistas, chatbot
+from routers import auth, lotes, exportadores, operadores, turistas, chatbot, productores
 from sqlalchemy import text
 
 app = FastAPI(
@@ -89,6 +89,7 @@ app.include_router(exportadores.router, prefix="/exportadores", tags=["Exportado
 app.include_router(operadores.router,   prefix="/operadores",   tags=["Operadores Turísticos"])
 app.include_router(turistas.router,     prefix="/turistas",     tags=["Turistas"])
 app.include_router(chatbot.router,      prefix="/chatbot",      tags=["Chatbot IA"])
+app.include_router(productores.router,  prefix="/productores",  tags=["Productores"])
 
 @app.get("/", tags=["Health"])
 def root():
