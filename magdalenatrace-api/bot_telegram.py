@@ -489,6 +489,18 @@ def run_bot():
 
     logger.info("Bot de Telegram iniciando polling...")
     try:
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+        loop.run_until_complete(app.initialize())
+        loop.run_until_complete(app.start())
+        loop.run_until_complete(app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
+        loop.run_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
     finally:
-        loop.close()
+        try:
+            loop.run_until_complete(app.updater.stop())
+            loop.run_until_complete(app.stop())
+            loop.run_until_complete(app.shutdown())
+        except Exception:
+            pass
+        finally:
+            loop.close()
