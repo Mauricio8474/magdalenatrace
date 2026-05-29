@@ -33,6 +33,7 @@ def _apply_migrations():
         ("experiencias",  "cupo_maximo",   "INTEGER"),
         ("experiencias",  "incluye",       "VARCHAR"),
         ("operadores_turisticos", "tipo_operador", "VARCHAR"),
+        ("usuarios",      "telegram_id",   "BIGINT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_cols:

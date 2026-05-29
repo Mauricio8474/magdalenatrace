@@ -131,7 +131,10 @@ async def cmd_cancelar(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def _mostrar_lotes(uid: int, reply):
-    pid = _d(uid).get("productor_id")
+    d = _d(uid)
+    pid = d.get("productor_id")
+    if not pid and not _restore_session(uid, d):
+        pid = d.get("productor_id")
     if not pid:
         await reply("⚠️ No tienes perfil de productor.")
         return
@@ -153,7 +156,10 @@ async def _mostrar_lotes(uid: int, reply):
 
 
 async def _mostrar_certs(uid: int, reply):
-    pid = _d(uid).get("productor_id")
+    d = _d(uid)
+    pid = d.get("productor_id")
+    if not pid and not _restore_session(uid, d):
+        pid = d.get("productor_id")
     if not pid:
         await reply("⚠️ No tienes perfil de productor.")
         return
@@ -195,7 +201,9 @@ async def button_handler(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     uid = update.effective_user.id
-    d = q.data
+    d = _d(uid)
+    _restore_session(uid, d)
+    data = q.data
 
     async def edit(text: str, md=False, kb=False):
         kw = {"parse_mode": "Markdown"} if md else {}
@@ -205,22 +213,22 @@ async def button_handler(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
 
     kb_back = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="m_volver")]])
 
-    if d == "m_cosecha":
+    if data == "m_cosecha":
         _set_state(uid, ESTADO.COSECHA_PRODUCTO)
         await edit("📦 *Registrar cosecha*\n\n¿Qué producto cosechaste?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Otro", md=True)
-    elif d == "m_insumo":
+    elif data == "m_insumo":
         _set_state(uid, ESTADO.INSUMO_NOMBRE)
         await edit("🌱 *Registrar insumo*\n\n¿Qué insumo aplicaste?", md=True)
-    elif d == "m_despacho":
+    elif data == "m_despacho":
         _set_state(uid, ESTADO.DESPACHO_PRODUCTO)
         await edit("🚚 *Registrar despacho*\n\n¿Qué producto despachaste?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Otro", md=True)
-    elif d == "m_lotes":
+    elif data == "m_lotes":
         await _mostrar_lotes(uid, lambda t, md=False: edit(t, md=md, kb=True))
-    elif d == "m_certs":
+    elif data == "m_certs":
         await _mostrar_certs(uid, lambda t, md=False: edit(t, md=md, kb=True))
-    elif d == "m_catalogo":
+    elif data == "m_catalogo":
         await _mostrar_catalogo(lambda t, md=False: edit(t, md=md, kb=True))
-    elif d == "m_ayuda":
+    elif data == "m_ayuda":
         await edit(
             "❓ *Ayuda*\n\n"
             "/start — Iniciar\n"
@@ -229,16 +237,36 @@ async def button_handler(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
             "¿Problemas? Contacta al administrador.",
             md=True, kb=True,
         )
-    elif d == "m_volver":
+    elif data == "m_volver":
         _set_state(uid, ESTADO.MENU_PRINCIPAL)
         await edit(MENU, md=True, kb=True)
+
+
+def _restore_session(uid: int, d: dict) -> bool:
+    """Si la sesión en memoria se perdió (bot reiniciado), recupera desde DB vía telegram_id."""
+    if d.get("productor_id") and d.get("usuario_id"):
+        return True
+    db = _db()
+    try:
+        u = db.query(Usuario).filter(Usuario.telegram_id == uid).first()
+        if u and u.rol == RolEnum.productor:
+            p = db.query(Productor).filter(Productor.usuario_id == u.id).first()
+            d["nombre"] = u.nombre_completo
+            d["telefono"] = u.telefono or ""
+            d["usuario_id"] = u.id
+            d["productor_id"] = p.id if p else None
+            return True
+        return False
+    finally:
+        db.close()
 
 
 async def handle_message(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text.strip()
-    st = _state(uid)
     d = _d(uid)
+    _restore_session(uid, d)
+    st = _state(uid)
 
     async def reply(text: str, md=False, kb=False):
         kw = {"parse_mode": "Markdown"} if md else {}
@@ -267,10 +295,12 @@ async def handle_message(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
         try:
             u = db.query(Usuario).filter(Usuario.telefono == tel).first()
             if u and u.rol == RolEnum.productor:
+                u.telegram_id = uid
                 p = db.query(Productor).filter(Productor.usuario_id == u.id).first()
                 d["nombre"] = u.nombre_completo
                 d["productor_id"] = p.id if p else None
                 d["usuario_id"] = u.id
+                db.commit()
                 _set_state(uid, ESTADO.MENU_PRINCIPAL)
                 await reply(f"👋 ¡Bienvenido de nuevo, *{u.nombre_completo}*!\n\n{MENU}", md=True, kb=True)
             else:
@@ -318,7 +348,8 @@ async def handle_message(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
                 return round(c + random.uniform(-0.01, 0.01), 6) if c else None
 
             u = Usuario(telefono=d["telefono"], nombre_completo=d["nombre"],
-                        rol=RolEnum.productor, activo=True, aprobado=True)
+                        rol=RolEnum.productor, activo=True, aprobado=True,
+                        telegram_id=uid)
             db.add(u)
             db.flush()
             p = Productor(usuario_id=u.id, finca=d["finca"], vereda=d["vereda"],
@@ -491,7 +522,10 @@ def run_bot():
     try:
         loop.run_until_complete(app.initialize())
         loop.run_until_complete(app.start())
-        loop.run_until_complete(app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
+        loop.run_until_complete(app.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True
+        ))
         loop.run_forever()
     except (KeyboardInterrupt, SystemExit):
         pass

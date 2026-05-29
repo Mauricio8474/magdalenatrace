@@ -4,7 +4,7 @@ Responsable: Mauricio Morales
 ⚠️ NADIE modifica este archivo sin avisar al equipo primero.
    Es la fuente de verdad de la base de datos.
 """
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, BigInteger, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -51,6 +51,7 @@ class Usuario(Base):
     rol              = Column(SAEnum(RolEnum), nullable=False)
     activo           = Column(Boolean, default=True)
     aprobado         = Column(Boolean, default=False)
+    telegram_id      = Column(BigInteger, nullable=True, unique=True)
     creado_en        = Column(DateTime, default=datetime.utcnow)
 
 
