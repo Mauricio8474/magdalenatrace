@@ -97,6 +97,8 @@ def _detectar_viz(texto: str, db: Session):
 @router.post("/mensaje", response_model=ChatbotResponse, summary="Chat con el asistente de MagdalenaTrace")
 def chatbot_mensaje(body: ChatbotRequest, db: Session = Depends(get_db)):
     api_key = os.getenv("GEMINI_API_KEY", "")
+    import logging
+    logging.getLogger("chatbot").info(f"GEMINI_API_KEY len={len(api_key)} first={api_key[:8] if api_key else 'EMPTY'}")
     if not api_key or api_key == "tu_api_key_aqui":
         return {
             "respuesta": (
