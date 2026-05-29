@@ -47,6 +47,9 @@ def _apply_migrations():
 
 @app.on_event("startup")
 def startup():
+    # 0. Inicializar API key del chatbot (Railway inyecta tarde)
+    chatbot.init_api_key()
+
     # 1. Crear tablas nuevas (Reserva, etc.)
     Base.metadata.create_all(bind=engine)
     print("✅ Tablas creadas / verificadas")
@@ -67,10 +70,6 @@ def startup():
         print(f"❌ Error en seed: {e}")
     finally:
         db.close()
-
-    # Debug env vars
-    print(f"🔍 GEMINI_API_KEY exists={bool(os.getenv('GEMINI_API_KEY', ''))} len={len(os.getenv('GEMINI_API_KEY', ''))}")
-    print(f"🔍 TELEGRAM_BOT_TOKEN exists={bool(os.getenv('TELEGRAM_BOT_TOKEN', ''))}")
 
     # 4. Bot de Telegram en thread daemon
     if os.getenv("TELEGRAM_BOT_TOKEN"):

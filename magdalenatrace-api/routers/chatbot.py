@@ -12,9 +12,15 @@ import os
 
 router = APIRouter()
 
-# Cachear la key al importar (Railway la pierde entre startup y request)
-GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
-print(f"[CHATBOT] 🔑 Cargando GEMINI_API_KEY en módulo: exists={bool(GEMINI_API_KEY)} len={len(GEMINI_API_KEY)} prefix={GEMINI_API_KEY[:8] or 'NONE'}", flush=True)
+# Se llena desde main.py startup (Railway inyecta env vars despues de import)
+GEMINI_API_KEY = ""
+
+
+def init_api_key():
+    """Llamado desde main.py startup — Railway inyecta env vars tarde."""
+    global GEMINI_API_KEY
+    GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
+    print(f"[CHATBOT] 🔑 init_api_key: exists={bool(GEMINI_API_KEY)} len={len(GEMINI_API_KEY)} prefix={GEMINI_API_KEY[:8] or 'NONE'}", flush=True)
 
 SYSTEM_INSTRUCTION = """Eres el asistente oficial de MagdalenaTrace, una plataforma de trazabilidad agrícola de la Sierra Nevada de Santa Marta, Colombia.
 
