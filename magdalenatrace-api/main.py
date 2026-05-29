@@ -68,9 +68,7 @@ def startup():
         db.close()
 
     # 4. Bot de Telegram en thread daemon
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    print(f"🔍 DEBUG TELEGRAM_BOT_TOKEN: len={len(token)}, exists={bool(token)}")
-    if token:
+    if os.getenv("TELEGRAM_BOT_TOKEN"):
         print("🤖 Iniciando bot de Telegram en thread secundario...")
         from bot_telegram import run_bot
         bot_thread = threading.Thread(target=run_bot, daemon=True, name="telegram-bot")
