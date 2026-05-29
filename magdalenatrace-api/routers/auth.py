@@ -5,10 +5,11 @@ Responsable: Mauricio Morales
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Usuario, Productor, Exportador, Turista, RolEnum
+from models import Usuario, Productor, Exportador, Turista, OperadorTuristico, RolEnum
 from schemas import (
     LoginRequest, TokenResponse,
     RegistroExportadorRequest, RegistroTuristaRequest,
+    RegistroOperadorRequest,
     WhatsAppIniciarRequest, WhatsAppIniciarResponse,
 )
 from auth import verify_password, hash_password, create_access_token
@@ -88,6 +89,43 @@ def registro_turista(body: RegistroTuristaRequest, db: Session = Depends(get_db)
         "rol": u.rol,
         "nombre": u.nombre_completo,
         "id": u.id,
+    }
+
+
+@router.post("/registro/operador", status_code=201,
+             summary="Registro de operador turístico (aprobación inmediata)")
+def registro_operador(body: RegistroOperadorRequest, db: Session = Depends(get_db)):
+    if db.query(Usuario).filter(Usuario.email == body.email).first():
+        raise HTTPException(status_code=400, detail="Email ya registrado")
+
+    u = Usuario(
+        email=body.email,
+        nombre_completo=body.nombre_completo,
+        hashed_password=hash_password(body.password),
+        rol=RolEnum.operador_turistico,
+        activo=True,
+        aprobado=True,   # operadores se aprueban automáticamente
+    )
+    db.add(u)
+    db.flush()
+
+    op = OperadorTuristico(
+        usuario_id=u.id,
+        empresa=body.empresa,
+        ciudad=body.ciudad,
+        servicios=body.servicios,
+        tipo_operador=body.tipo_operador,
+    )
+    db.add(op)
+    db.commit()
+
+    token = create_access_token({"sub": str(u.id)})
+    return {
+        "access_token": token,
+        "token_type":   "bearer",
+        "rol":          u.rol,
+        "nombre":       u.nombre_completo,
+        "id":           u.id,
     }
 
 

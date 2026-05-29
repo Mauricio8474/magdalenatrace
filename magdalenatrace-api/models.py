@@ -145,13 +145,14 @@ class OrdenCompra(Base):
 
 class OperadorTuristico(Base):
     __tablename__ = "operadores_turisticos"
-    id           = Column(Integer, primary_key=True, index=True)
-    usuario_id   = Column(Integer, ForeignKey("usuarios.id"), unique=True)
-    empresa      = Column(String)
-    ciudad       = Column(String)
-    servicios    = Column(String)   # "Agroturismo,Ecoturismo,Finca-Hotel"
-    usuario      = relationship("Usuario", backref="operador_perfil")
-    experiencias = relationship("Experiencia", back_populates="operador")
+    id              = Column(Integer, primary_key=True, index=True)
+    usuario_id      = Column(Integer, ForeignKey("usuarios.id"), unique=True)
+    empresa         = Column(String)
+    ciudad          = Column(String)
+    servicios       = Column(String)        # "Agroturismo,Ecoturismo,Finca-Hotel"
+    tipo_operador   = Column(String, nullable=True)  # "hotel"|"agencia"|"guia"|"persona_natural"
+    usuario         = relationship("Usuario", backref="operador_perfil")
+    experiencias    = relationship("Experiencia", back_populates="operador")
 
 
 class Experiencia(Base):
@@ -164,6 +165,9 @@ class Experiencia(Base):
     precio_cop     = Column(Float)
     duracion_horas = Column(Float)
     disponible     = Column(Boolean, default=True)
+    tipo_servicio  = Column(String, nullable=True)    # "Agroturismo"|"Ecoturismo"|...
+    cupo_maximo    = Column(Integer, nullable=True)
+    incluye        = Column(String, nullable=True)    # "Transporte,Alimentación,Guía"
     operador       = relationship("OperadorTuristico", back_populates="experiencias")
     productor      = relationship("Productor")
 
@@ -175,3 +179,23 @@ class Turista(Base):
     pais_origen  = Column(String)
     favoritos    = Column(Text, default="[]")   # JSON: lista de lote_ids
     usuario      = relationship("Usuario", backref="turista_perfil")
+
+
+class EstadoReservaEnum(str, enum.Enum):
+    pendiente  = "pendiente"
+    confirmada = "confirmada"
+    cancelada  = "cancelada"
+
+
+class Reserva(Base):
+    __tablename__ = "reservas"
+    id             = Column(Integer, primary_key=True, index=True)
+    experiencia_id = Column(Integer, ForeignKey("experiencias.id"))
+    turista_id     = Column(Integer, ForeignKey("turistas.id"), nullable=True)
+    fecha          = Column(String)
+    num_personas   = Column(Integer, default=1)
+    estado         = Column(SAEnum(EstadoReservaEnum), default=EstadoReservaEnum.pendiente)
+    notas          = Column(Text, nullable=True)
+    creado_en      = Column(DateTime, default=datetime.utcnow)
+    experiencia    = relationship("Experiencia")
+    turista        = relationship("Turista", foreign_keys=[turista_id])

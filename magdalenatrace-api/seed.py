@@ -5,7 +5,7 @@ Ejecutar: python seed.py
 """
 import random
 from database import SessionLocal, engine, Base
-from models import Usuario, Productor, Lote, CTE, Certificacion, Exportador, OrdenCompra, OperadorTuristico, Experiencia, Turista, RolEnum, EstadoLoteEnum, TipoCTEEnum
+from models import Usuario, Productor, Lote, CTE, Certificacion, Exportador, OrdenCompra, OperadorTuristico, Experiencia, Turista, Reserva, RolEnum, EstadoLoteEnum, TipoCTEEnum
 from auth import hash_password
 from datetime import datetime
 
@@ -107,14 +107,55 @@ u_op = Usuario(email="operador@sierraaventura.co", nombre_completo="Ana Torres",
                activo=True, aprobado=True)
 db.add(u_op); db.flush()
 op = OperadorTuristico(usuario_id=u_op.id, empresa="Sierra Aventura Tours",
-                       ciudad="Santa Marta", servicios="Agroturismo,Ecoturismo")
+                       ciudad="Santa Marta", servicios="Agroturismo,Ecoturismo",
+                       tipo_operador="agencia")
 db.add(op); db.flush()
 
-exp_tur = Experiencia(operador_id=op.id, productor_id=productores_creados[0].id,
-                      titulo="Tour del café en la Sierra Nevada", precio_cop=85000.0,
-                      duracion_horas=4.0, disponible=True,
-                      descripcion="Visita a la finca El Paraíso en Minca. Recorrido por el proceso completo del café: recolección, despulpe, secado y cata.")
-db.add(exp_tur)
+exp_tur = Experiencia(
+    operador_id=op.id,
+    productor_id=productores_creados[0].id,
+    titulo="Tour del café en la Sierra Nevada",
+    precio_cop=85000.0,
+    duracion_horas=4.0,
+    disponible=True,
+    tipo_servicio="Agroturismo",
+    cupo_maximo=8,
+    incluye="Transporte desde Santa Marta,Almuerzo típico,Cata de café,Bolsa 250g de café especial",
+    descripcion=(
+        "Visita a la finca El Paraíso en Minca. Recorrido completo del café de especialidad: "
+        "recolección manual, despulpe, fermentación, secado en camas africanas y cata profesional. "
+        "Incluye almuerzo típico samario y bolsa de café para llevar."
+    ),
+)
+db.add(exp_tur); db.flush()
+
+# ── Segundo Operador — Minca Eco Lodge ────────────────────────────────────────
+u_op2 = Usuario(email="ecolodge@minca.co", nombre_completo="Carlos Mendoza",
+                hashed_password=hash_password("minca2026"), rol=RolEnum.operador_turistico,
+                activo=True, aprobado=True)
+db.add(u_op2); db.flush()
+op2 = OperadorTuristico(usuario_id=u_op2.id, empresa="Minca Eco Lodge",
+                        ciudad="Minca", servicios="Finca-hotel,Agroturismo,Ecoturismo",
+                        tipo_operador="hotel")
+db.add(op2); db.flush()
+
+exp_cacao = Experiencia(
+    operador_id=op2.id,
+    productor_id=productores_creados[2].id,   # El Edén — cacao
+    titulo="Chocolatería artesanal en Palmor",
+    precio_cop=95000.0,
+    duracion_horas=5.0,
+    disponible=True,
+    tipo_servicio="Experiencia gastronómica",
+    cupo_maximo=10,
+    incluye="Transporte,Taller de chocolate artesanal,Kit cacao + tableta personalizada,Chef local",
+    descripcion=(
+        "Conoce el proceso completo del cacao fino de aroma en la finca El Edén en Palmor. "
+        "Desde la apertura de la mazorca hasta moldear tu propia tableta: fermentación, secado solar, "
+        "tostado y conchado artesanal con técnicas ancestrales del Magdalena. Te llevas tu creación."
+    ),
+)
+db.add(exp_cacao)
 
 # ── Turista ────────────────────────────────────────────────────────────────────
 u_tur = Usuario(email="tourist@example.com", nombre_completo="John Smith",

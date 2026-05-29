@@ -2,9 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Importar modelos ANTES de create_all para que SQLAlchemy los registre
-from models import Usuario, Productor, Lote, CTE, Certificacion, Exportador, OrdenCompra, OperadorTuristico, Experiencia, Turista
+from models import Usuario, Productor, Lote, CTE, Certificacion, Exportador, OrdenCompra, OperadorTuristico, Experiencia, Turista, Reserva
 from database import Base, engine, SessionLocal
 from routers import auth, lotes, exportadores, operadores, turistas, chatbot
+from sqlalchemy import text
 
 app = FastAPI(
     title="MagdalenaTrace API",
@@ -20,13 +21,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _apply_migrations():
+    """Agrega columnas nuevas a tablas existentes (SQLite no soporta ALTER TABLE DROP,
+    pero sí ADD COLUMN — seguro de correr múltiples veces)."""
+    new_cols = [
+        # tabla                     columna            tipo
+        ("experiencias",  "tipo_servicio", "VARCHAR"),
+        ("experiencias",  "cupo_maximo",   "INTEGER"),
+        ("experiencias",  "incluye",       "VARCHAR"),
+        ("operadores_turisticos", "tipo_operador", "VARCHAR"),
+    ]
+    with engine.connect() as conn:
+        for table, col, col_type in new_cols:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                conn.commit()
+                print(f"  ↳ Migración: {table}.{col} añadida")
+            except Exception:
+                pass   # La columna ya existe
+
+
 @app.on_event("startup")
 def startup():
-    # 1. Crear tablas (modelos ya importados arriba)
+    # 1. Crear tablas nuevas (Reserva, etc.)
     Base.metadata.create_all(bind=engine)
-    print("✅ Tablas creadas")
+    print("✅ Tablas creadas / verificadas")
 
-    # 2. Seed si BD vacía
+    # 2. Migrar columnas en tablas existentes
+    _apply_migrations()
+
+    # 3. Seed si BD vacía
     db = SessionLocal()
     try:
         count = db.query(Usuario).count()

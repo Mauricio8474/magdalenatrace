@@ -137,6 +137,52 @@ class DashboardExportadorResponse(BaseModel):
     certificaciones_fairtrade_activas: int
 
 
+# ── Operadores Turísticos ──────────────────────────────────────────────────────
+
+class RegistroOperadorRequest(BaseModel):
+    nombre_completo: str
+    email: str
+    password: str
+    empresa: str
+    tipo_operador: Optional[str] = None   # "hotel"|"agencia"|"guia"|"persona_natural"
+    ciudad: str
+    servicios: Optional[str] = None       # "Agroturismo,Ecoturismo,Finca-hotel"
+
+class CrearExperienciaRequest(BaseModel):
+    titulo: str
+    descripcion: str
+    tipo_servicio: Optional[str] = None
+    precio_cop: float
+    duracion_horas: float
+    productor_id: int
+    cupo_maximo: Optional[int] = None
+    incluye: Optional[str] = None         # "Transporte,Alimentación,Guía"
+    disponible: bool = True
+
+class ToggleExperienciaRequest(BaseModel):
+    disponible: bool
+
+class DashboardOperadorResponse(BaseModel):
+    experiencias_activas: int
+    reservas_este_mes: int
+    fincas_vinculadas: int
+    visitantes_totales: int
+
+class CrearReservaRequest(BaseModel):
+    experiencia_id: int
+    fecha: str
+    num_personas: int = 1
+    notas: Optional[str] = None
+
+class ReservaResponse(BaseModel):
+    id: int
+    experiencia_titulo: str
+    fecha: str
+    num_personas: int
+    estado: str
+    turista_nombre: str
+
+
 # ── Chatbot ────────────────────────────────────────────────────────────────────
 
 class MensajeHistorial(BaseModel):
