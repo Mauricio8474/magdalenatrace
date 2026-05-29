@@ -1,20 +1,27 @@
-const COLORS = {
-  'Fairtrade':           '#38AB3F',
-  'Rainforest Alliance': '#058389',
-  'BPA':                 '#219BD6',
+const CERT_CONFIG = {
+  'Fairtrade':           { bg: '#27AE60', icon: '🌱' },
+  'Rainforest Alliance': { bg: '#1A5C38', icon: '🌳' },
+  'BPA':                 { bg: '#0077B6', icon: '✅' },
 }
 
 export default function CertBadge({ type, status }) {
-  const bg = status === 'vencida' ? '#9CA3AF' : (COLORS[type] || '#6B7280')
+  const config = CERT_CONFIG[type]
+  const bg = status === 'vencida' ? '#9CA3AF' : (config?.bg || '#6B7280')
   return (
     <span style={{
-      background: bg, color: '#fff',
-      padding: '2px 8px', borderRadius: 12,
-      fontSize: 11, fontWeight: 600,
-      fontFamily: 'var(--font-main)',
+      background: bg,
+      color: '#fff',
+      padding: '3px 10px',
+      borderRadius: 12,
+      fontSize: 11,
+      fontWeight: 600,
+      fontFamily: 'var(--font-cuerpo)',
       whiteSpace: 'nowrap',
-      display: 'inline-block',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
     }}>
+      {config?.icon && <span style={{ fontSize: 10 }}>{config.icon}</span>}
       {type}
     </span>
   )

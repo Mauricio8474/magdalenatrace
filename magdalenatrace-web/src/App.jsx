@@ -14,7 +14,8 @@ import LotePublico   from './pages/LotePublico/index.jsx'
 import OperadorDashboard from './pages/Operador/Dashboard.jsx'
 
 // Landing
-import Landing       from './pages/Landing.jsx'
+import Landing           from './pages/Landing.jsx'
+import ExperienciaPublica from './pages/Experiencia/index.jsx'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
       <Route path="/registro"       element={<Registro />} />
       <Route path="/mapa"           element={<MapaPage />} />
       <Route path="/lote/:id"       element={<LotePublico />} />
+      <Route path="/experiencia/:id" element={<ExperienciaPublica />} />
 
       {/* Canal Productor */}
       <Route path="/whatsapp"       element={<WhatsAppBot />} />

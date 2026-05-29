@@ -1,79 +1,223 @@
 /* ================================================================
-   MagdalenaTrace — Variables de marca USM
-   Manual de Marca: Institución Universitaria de Santa Marta
+   MagdalenaTrace — Paleta del Magdalena
+   Sierra Nevada · Café · Cacao · Banano · Mar Caribe
    ================================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Colores primarios USM */
-  --usm-blue:       #1C5DA9;
-  --usm-sky:        #93D3F5;
-  --usm-teal:       #63C2CA;
+  /* Verdes de la Sierra Nevada */
+  --verde-sierra:    #2D6A4F;
+  --verde-medio:     #40916C;
+  --verde-claro:     #52B788;
+  --verde-pale:      #B7E4C7;
 
-  /* Colores secundarios USM */
-  --usm-green:      #38AB3F;
-  --usm-teal-dark:  #058389;
-  --usm-navy:       #1E3256;
-  --usm-blue-mid:   #219BD6;
-  --usm-blue-pale:  #CDE9F6;
-  --usm-deco:       #D9E2F0;
+  /* Tierra y café */
+  --cafe-oscuro:     #3E1F00;
+  --cafe-medio:      #7B3F00;
+  --dorado:          #D4A04A;
+  --crema:           #FDF6EC;
 
-  /* Sistema */
+  /* Agua y cielo caribe */
+  --azul-caribe:     #0077B6;
+  --azul-claro:      #90E0EF;
+
+  /* Neutros */
+  --blanco:          #FFFFFF;
+  --gris-claro:      #F5F5F0;
+  --texto-oscuro:    #1A1A2E;
+  --texto-medio:     #4A4A4A;
+
+  /* Tipografía */
+  --font-titulo: 'Playfair Display', serif;
+  --font-cuerpo: 'Inter', sans-serif;
+
+  /* ── Legacy aliases (páginas no rediseñadas usan estos) ── */
+  --usm-blue:       #0077B6;
+  --usm-sky:        #90E0EF;
+  --usm-teal:       #40916C;
+  --usm-teal-dark:  #2D6A4F;
+  --usm-navy:       #1A1A2E;
+  --usm-blue-mid:   #0077B6;
+  --usm-blue-pale:  #B7E4C7;
+  --usm-deco:       #B7E4C7;
+  --usm-green:      #52B788;
+  --bg-light:       #F5F5F0;
+  --text-primary:   #1A1A2E;
+  --text-body:      #4A4A4A;
+  --font-main:      'Inter', sans-serif;
+  --white:          #FFFFFF;
+
+  /* WhatsApp (bot del productor) */
   --whatsapp:       #25D366;
   --whatsapp-dark:  #075E54;
   --whatsapp-chat:  #E5DDD5;
   --whatsapp-bubble:#DCF8C6;
-  --white:          #FFFFFF;
-  --text-primary:   #1E3256;
-  --text-body:      #374151;
-  --bg-light:       #F5F7FA;
-
-  /* Tipografía — sustituto web de Helvetica Neue */
-  --font-main: 'Montserrat', sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--font-main);
-  color: var(--text-body);
-  background: var(--bg-light);
+  font-family: var(--font-cuerpo);
+  color: var(--texto-medio);
+  background: var(--gris-claro);
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { color: var(--usm-navy); font-weight: 700; }
-a { color: var(--usm-blue); text-decoration: none; }
-a:hover { color: var(--usm-teal-dark); }
+h1, h2, h3 {
+  font-family: var(--font-titulo);
+  color: var(--verde-sierra);
+  font-weight: 700;
+}
 
-/* Botones estándar USM */
+a { color: var(--azul-caribe); text-decoration: none; }
+a:hover { color: var(--verde-medio); }
+
+/* ── Botones ───────────────────────────────────────────────────── */
 .btn-primary {
-  background: var(--usm-blue);
+  background: var(--verde-sierra);
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 10px 20px;
-  font-family: var(--font-main);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-family: var(--font-cuerpo);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.15s;
 }
-.btn-primary:hover { background: var(--usm-navy); }
+.btn-primary:hover {
+  background: var(--cafe-oscuro);
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(62, 31, 0, 0.25);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .btn-secondary {
-  background: var(--usm-teal);
-  color: white;
+  background: var(--dorado);
+  color: var(--cafe-oscuro);
   border: none;
-  border-radius: 6px;
-  padding: 10px 20px;
-  font-family: var(--font-main);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-family: var(--font-cuerpo);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover {
+  background: #c4902a;
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(212, 160, 74, 0.35);
+}
+
+.btn-outline {
+  background: transparent;
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-family: var(--font-cuerpo);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
-.btn-secondary:hover { background: var(--usm-teal-dark); }
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: white;
+  transform: scale(1.02);
+}
 
-/* Badges de certificación */
-.badge-fairtrade    { background: #38AB3F; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-.badge-rainforest   { background: #058389; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-.badge-bpa          { background: #219BD6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-.badge-vencida      { background: #9CA3AF; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+/* ── Badges de certificación ───────────────────────────────────── */
+.badge-fairtrade  { background: #27AE60; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; white-space: nowrap; }
+.badge-rainforest { background: #1A5C38; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; white-space: nowrap; }
+.badge-bpa        { background: #0077B6; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; white-space: nowrap; }
+.badge-vencida    { background: #9CA3AF; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; white-space: nowrap; }
+
+/* ── Animaciones ───────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bounceArrow {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(10px); }
+}
+
+@keyframes wordAppear {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes leafSway {
+  0%, 100% { transform: rotate(-4deg); }
+  50%       { transform: rotate(4deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+/* ── Dashboard layout ──────────────────────────────────────────── */
+.dashboard-sidebar {
+  width: 240px;
+  background: var(--cafe-oscuro);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
+}
+
+.dashboard-main {
+  margin-left: 240px;
+  min-height: 100vh;
+  background: var(--gris-claro);
+}
+
+@media (max-width: 768px) {
+  .dashboard-sidebar {
+    transform: translateX(-100%);
+  }
+  .dashboard-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.35);
+  }
+  .dashboard-main {
+    margin-left: 0 !important;
+  }
+}
+
+/* ── Inputs ────────────────────────────────────────────────────── */
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--verde-medio);
+  outline-offset: 1px;
+  border-color: var(--verde-medio) !important;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--gris-claro); }
+::-webkit-scrollbar-thumb { background: var(--verde-pale); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--verde-medio); }
