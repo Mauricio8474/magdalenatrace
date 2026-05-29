@@ -79,7 +79,7 @@ for l in LOTES_DEMO:
     prod = productores_creados[l["prod_idx"]]
     lote = Lote(id=l["id"], productor_id=prod.id, producto=l["producto"], variedad=l["variedad"],
                 fecha_cosecha=l["fecha"], volumen_kg=l["kg"], precio_kg=l["precio"],
-                estado=EstadoLoteEnum.disponible, qr_url=f"http://localhost:5173/lote/{l['id']}")
+                estado=EstadoLoteEnum.disponible, qr_url=f"https://magdalenatrace.vercel.app/lote/{l['id']}")
     db.add(lote); db.flush()
 
     # CTEs base para cada lote

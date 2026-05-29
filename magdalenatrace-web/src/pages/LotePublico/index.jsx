@@ -110,7 +110,7 @@ export default function LotePublico() {
 
   const estadoStyle = ESTADO_STYLE[lote.estado] || ESTADO_STYLE.disponible
   const coords      = COORDS_VEREDA[lote.vereda]
-  const qrUrl       = `http://localhost:5173/lote/${lote.id}`
+  const qrUrl       = `${window.location.origin}/lote/${lote.id}`
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-light)', fontFamily: 'var(--font-main)' }}>

@@ -1,7 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react'
 
 export default function QRGenerator({ loteId, size = 180 }) {
-  const url = `http://localhost:5173/lote/${loteId}`
+  const url = `${window.location.origin}/lote/${loteId}`
 
   function descargar() {
     const container = document.getElementById(`qr-svg-${loteId}`)

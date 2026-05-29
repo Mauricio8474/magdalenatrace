@@ -146,7 +146,7 @@ def get_lote_qr(lote_id: str, db: Session = Depends(get_db)):
     except ImportError:
         raise HTTPException(status_code=500, detail="qrcode no instalado. Ejecuta: pip install qrcode[pil]")
 
-    url = f"http://localhost:5173/lote/{lote_id}"
+    url = f"https://magdalenatrace.vercel.app/lote/{lote_id}"
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(url)
     qr.make(fit=True)
