@@ -18,6 +18,7 @@ dist/
 
 # ── Sistema ─────────────────────────────
 .DS_Store
+claude/
 Thumbs.db
 *.log
 .vscode/
