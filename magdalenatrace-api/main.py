@@ -47,6 +47,15 @@ def _apply_migrations():
 
 @app.on_event("startup")
 def startup():
+    # Debug: listar TODAS las env vars para diagnóstico
+    print("=" * 60, flush=True)
+    print("🔍 DIAGNÓSTICO DE ENV VARS EN RAILWAY:", flush=True)
+    for k, v in sorted(os.environ.items()):
+        if any(x in k.lower() for x in ("key", "api", "token", "secret", "gemini", "telegram")):
+            print(f"  {k}={v[:12] if v else '(empty)'}... (len={len(v or '')})", flush=True)
+    print(f"  CWD: {os.getcwd()}", flush=True)
+    print("=" * 60, flush=True)
+
     # 0. Inicializar API key del chatbot (Railway inyecta tarde)
     chatbot.init_api_key()
 

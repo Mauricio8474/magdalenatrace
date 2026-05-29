@@ -22,6 +22,7 @@ def init_api_key():
     GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
     print(f"[CHATBOT] 🔑 init_api_key: exists={bool(GEMINI_API_KEY)} len={len(GEMINI_API_KEY)} prefix={GEMINI_API_KEY[:8] or 'NONE'}", flush=True)
 
+
 SYSTEM_INSTRUCTION = """Eres el asistente oficial de MagdalenaTrace, una plataforma de trazabilidad agrícola de la Sierra Nevada de Santa Marta, Colombia.
 
 ## Dominio permitido
@@ -106,7 +107,13 @@ def _detectar_viz(texto: str, db: Session):
 
 @router.post("/mensaje", response_model=ChatbotResponse, summary="Chat con el asistente de MagdalenaTrace")
 def chatbot_mensaje(body: ChatbotRequest, db: Session = Depends(get_db)):
-    api_key = GEMINI_API_KEY
+    # Lee directo de os.environ por si Railway inyecta en cualquier momento
+    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    print(f"[CHATBOT] 💬 mensaje: os.environ key exists={bool(api_key)} len={len(api_key)} prefix={api_key[:8] or 'NONE'}", flush=True)
+    if not api_key:
+        if GEMINI_API_KEY:
+            api_key = GEMINI_API_KEY
+            print(f"[CHATBOT] 💬 fallback a GEMINI_API_KEY module var: exists=True len={len(api_key)}", flush=True)
     if not api_key or api_key == "tu_api_key_aqui":
         return {
             "respuesta": (
