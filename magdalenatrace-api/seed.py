@@ -12,6 +12,12 @@ from datetime import datetime
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
+# Verificar si ya hay datos — si existe el admin, no volver a insertar
+if db.query(Usuario).filter(Usuario.email == "admin@magdalenatrace.co").first():
+    print("✅ Datos ya existen en la base de datos, saltando seed.")
+    db.close()
+    exit(0)
+
 def difuminar(coord: float) -> float:
     """Difumina una coordenada ±0.01° para proteger la privacidad del productor."""
     return round(coord + random.uniform(-0.01, 0.01), 6)
