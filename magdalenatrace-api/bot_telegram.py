@@ -1,646 +1,488 @@
 """
 bot_telegram.py — Bot de Telegram para productores de MagdalenaTrace
-Equipo: BahIA SMR — Hackathon Colombia 5.0
+Ejecutado como thread daemon desde main.py
 
-Flujos implementados:
-  /start → registro o menú según si ya existe
-  Menú   → cosecha | insumo | despacho | ver lotes | certs | ventas
+Flujo:
+  /start → pedir teléfono → verificar/registrar → menú principal
+  Menú: cosecha, insumo, despacho, mis lotes, certificaciones, catálogo
 """
 import os
-import asyncio
 import logging
 import random
-import threading
-from datetime import datetime
+from datetime import date
+from typing import Optional
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler,
-    filters, ContextTypes, ConversationHandler,
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes,
 )
 
 from database import SessionLocal
-from models import (
-    Usuario, Productor, Lote, CTE, Certificacion,
-    RolEnum, EstadoLoteEnum, TipoCTEEnum,
+from models import Usuario, Productor, Lote, CTE, Certificacion, RolEnum, TipoCTEEnum, EstadoLoteEnum
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("bot_telegram")
+
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
+
+class ESTADO:
+    INICIO = 0
+    ESPERANDO_TELEFONO = 1
+    REGISTRO_NOMBRE = 2
+    REGISTRO_FINCA = 3
+    REGISTRO_VEREDA = 4
+    REGISTRO_PRODUCTOS = 5
+    REGISTRO_ALTITUD = 6
+    MENU_PRINCIPAL = 7
+    COSECHA_PRODUCTO = 8
+    COSECHA_KG = 9
+    COSECHA_VARIEDAD = 10
+    COSECHA_LOTE = 11
+    INSUMO_NOMBRE = 12
+    INSUMO_CANTIDAD = 13
+    INSUMO_LOTE = 14
+    DESPACHO_PRODUCTO = 15
+    DESPACHO_KG = 16
+    DESPACHO_LOTE = 17
+
+
+PROD_MAP = {"1": "café", "2": "cacao", "3": "banano", "4": "otro"}
+PROD_REG_MAP = {"1": "café", "2": "cacao", "3": "banano", "4": "café,cacao,banano"}
+
+user_sessions: dict[int, dict] = {}
+
+
+def _ses(user_id: int) -> dict:
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {"state": ESTADO.INICIO, "data": {}}
+    return user_sessions[user_id]
+
+
+def _state(user_id: int) -> int:
+    return _ses(user_id)["state"]
+
+
+def _set_state(user_id: int, s: int):
+    _ses(user_id)["state"] = s
+
+
+def _d(user_id: int) -> dict:
+    return _ses(user_id)["data"]
+
+
+def _menu_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("1️⃣ Registrar cosecha", callback_data="m_cosecha")],
+        [InlineKeyboardButton("2️⃣ Registrar insumo", callback_data="m_insumo")],
+        [InlineKeyboardButton("3️⃣ Registrar despacho", callback_data="m_despacho")],
+        [InlineKeyboardButton("4️⃣ Mis lotes", callback_data="m_lotes")],
+        [InlineKeyboardButton("5️⃣ Mis certificaciones", callback_data="m_certs")],
+        [InlineKeyboardButton("6️⃣ Catálogo de lotes", callback_data="m_catalogo")],
+        [InlineKeyboardButton("❓ Ayuda", callback_data="m_ayuda")],
+    ])
+
+
+MENU = (
+    "🌾 *MagdalenaTrace — Menú*\n\n"
+    "1️⃣ Registrar cosecha\n"
+    "2️⃣ Registrar insumo\n"
+    "3️⃣ Registrar despacho\n"
+    "4️⃣ Ver mis lotes\n"
+    "5️⃣ Ver mis certificaciones\n"
+    "6️⃣ Catálogo de lotes\n"
+    "❓ Ayuda"
 )
 
-logging.basicConfig(
-    format="%(asctime)s [BOT] %(levelname)s — %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
-# ── Estados de la conversación ─────────────────────────────────────────────────
-(
-    MENU_PRINCIPAL,
-    REG_NOMBRE, REG_FINCA, REG_VEREDA, REG_PRODUCTO, REG_ALTITUD,
-    COSECHA_PRODUCTO, COSECHA_KG, COSECHA_VARIEDAD, COSECHA_LOTE,
-    INSUMO_NOMBRE, INSUMO_CANTIDAD, INSUMO_LOTE,
-    DESPACHO_LOTE, DESPACHO_TRANSPORTISTA, DESPACHO_DESTINO,
-) = range(16)
-
-KEYBOARD_MENU = [
-    ["1️⃣ Registrar cosecha",  "2️⃣ Registrar insumo"],
-    ["3️⃣ Registrar despacho", "4️⃣ Ver mis lotes"],
-    ["5️⃣ Ver certificaciones", "6️⃣ Ver mis ventas"],
-]
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def difuminar(coord: float) -> float:
-    """Difumina coordenada ±0.01° para proteger privacidad del productor."""
-    return round(coord + random.uniform(-0.01, 0.01), 6)
+def _db():
+    return SessionLocal()
 
 
-def get_productor(telegram_id: int):
-    """Busca productor por telegram_id (almacenado en Usuario.telefono)."""
-    db = SessionLocal()
+async def start(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    _set_state(uid, ESTADO.ESPERANDO_TELEFONO)
+    _d(uid).clear()
+    await update.message.reply_text(
+        "🌾 *Bienvenido a MagdalenaTrace*\n\n"
+        "Soy el asistente para productores de la Sierra Nevada.\n"
+        "Registra cosechas, insumos y consulta tus lotes.\n\n"
+        "Para comenzar, *¿cuál es tu número de teléfono?*\n"
+        "Formato: `57300XXXXXXX`",
+        parse_mode="Markdown",
+    )
+
+
+async def cmd_menu(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    _set_state(uid, ESTADO.MENU_PRINCIPAL)
+    await update.message.reply_text(MENU, parse_mode="Markdown", reply_markup=_menu_keyboard())
+
+
+async def cmd_cancelar(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    _set_state(uid, ESTADO.MENU_PRINCIPAL)
+    await update.message.reply_text("✅ Operación cancelada.", reply_markup=_menu_keyboard())
+
+
+async def _mostrar_lotes(uid: int, reply):
+    pid = _d(uid).get("productor_id")
+    if not pid:
+        await reply("⚠️ No tienes perfil de productor.")
+        return
+    db = _db()
     try:
-        usuario = db.query(Usuario).filter(
-            Usuario.telefono == str(telegram_id),
-            Usuario.rol == RolEnum.productor,
-        ).first()
-        if usuario:
-            productor = db.query(Productor).filter(
-                Productor.usuario_id == usuario.id
-            ).first()
-            return usuario, productor
-        return None, None
+        lotes = db.query(Lote).filter(Lote.productor_id == pid).all()
+        if not lotes:
+            await reply("📋 No tienes lotes registrados aún.", kb=True)
+            return
+        lines = []
+        for l in lotes:
+            certs = db.query(Certificacion).filter(Certificacion.productor_id == pid,
+                                                    Certificacion.estado == "vigente").all()
+            cs = f" 🏅{', '.join(c.tipo for c in certs)}" if certs else ""
+            lines.append(f"📦 *{l.id}* — {l.producto}{cs}\n   {l.volumen_kg} kg · {l.estado} · {len(l.ctes)}/4 CTEs")
+        await reply(f"📋 *Tus lotes ({len(lotes)}):*\n\n" + "\n\n".join(lines), md=True)
     finally:
         db.close()
 
 
-# ── /start ─────────────────────────────────────────────────────────────────────
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id   = update.effective_user.id
-    nombre_tg     = update.effective_user.first_name
-    usuario, prod = get_productor(telegram_id)
-
-    if prod:
-        await update.message.reply_text(
-            f"¡Bienvenido de nuevo, {usuario.nombre_completo}! 👋🌿\n\n"
-            "¿Qué deseas registrar hoy?",
-            reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
-        )
-        return MENU_PRINCIPAL
-
-    await update.message.reply_text(
-        f"¡Hola {nombre_tg}! 👋\n\n"
-        "Bienvenido a *MagdalenaTrace* — la plataforma de trazabilidad "
-        "agrícola del Magdalena. 🌿\n\n"
-        "Voy a registrarte en el sistema. Solo toma un minuto.\n\n"
-        "¿Cuál es tu *nombre completo*?",
-        parse_mode="Markdown",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return REG_NOMBRE
-
-
-# ── REGISTRO ───────────────────────────────────────────────────────────────────
-
-async def reg_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["nombre"] = update.message.text.strip()
-    await update.message.reply_text("¿Cómo se llama tu finca? 🏡")
-    return REG_FINCA
-
-
-async def reg_finca(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["finca"] = update.message.text.strip()
-    await update.message.reply_text("¿En qué vereda está ubicada? 📍")
-    return REG_VEREDA
-
-
-async def reg_vereda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["vereda"] = update.message.text.strip()
-    await update.message.reply_text(
-        "¿Qué productos cultivas? 🌿",
-        reply_markup=ReplyKeyboardMarkup(
-            [["1️⃣ Café", "2️⃣ Cacao"], ["3️⃣ Banano", "4️⃣ Varios"]],
-            resize_keyboard=True,
-        ),
-    )
-    return REG_PRODUCTO
-
-
-async def reg_producto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    opciones = {
-        "1️⃣ Café":   "café",
-        "2️⃣ Cacao":  "cacao",
-        "3️⃣ Banano": "banano",
-        "4️⃣ Varios": "café,cacao,banano",
-    }
-    context.user_data["productos"] = opciones.get(update.message.text, update.message.text)
-    await update.message.reply_text(
-        "¿A qué altura está tu finca?\n"
-        "Escribe los metros sobre el nivel del mar. Ej: *800*",
-        parse_mode="Markdown",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return REG_ALTITUD
-
-
-async def reg_altitud(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _mostrar_certs(uid: int, reply):
+    pid = _d(uid).get("productor_id")
+    if not pid:
+        await reply("⚠️ No tienes perfil de productor.")
+        return
+    db = _db()
     try:
-        altitud = int(update.message.text.replace("m", "").replace("msnm", "").strip())
-    except ValueError:
-        altitud = 800
-
-    telegram_id = update.effective_user.id
-    db = SessionLocal()
-    try:
-        usuario = Usuario(
-            telefono=str(telegram_id),
-            nombre_completo=context.user_data["nombre"],
-            rol=RolEnum.productor,
-            activo=True,
-            aprobado=True,
-        )
-        db.add(usuario)
-        db.flush()
-
-        productor = Productor(
-            usuario_id=usuario.id,
-            finca=context.user_data["finca"],
-            vereda=context.user_data["vereda"],
-            municipio="Santa Marta",
-            lat_aproximada=difuminar(11.1333),
-            lng_aproximada=difuminar(-74.1167),
-            altitud_msnm=altitud,
-            productos=context.user_data["productos"],
-        )
-        db.add(productor)
-        db.commit()
-
-        await update.message.reply_text(
-            f"✅ *¡Registro exitoso!*\n\n"
-            f"👤 Nombre: {context.user_data['nombre']}\n"
-            f"🏡 Finca: {context.user_data['finca']}\n"
-            f"📍 Vereda: {context.user_data['vereda']}\n"
-            f"🌿 Productos: {context.user_data['productos']}\n"
-            f"🏔️ Altitud: {altitud} msnm\n\n"
-            "Ya estás en MagdalenaTrace. ¿Qué deseas hacer?",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
-        )
-        return MENU_PRINCIPAL
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error en registro productor {telegram_id}: {e}")
-        await update.message.reply_text(
-            "⚠️ Hubo un error al registrarte. Escribe /start para intentar de nuevo."
-        )
-        return ConversationHandler.END
+        certs = db.query(Certificacion).filter(Certificacion.productor_id == pid).all()
+        if not certs:
+            await reply("🏅 No tienes certificaciones.", kb=True)
+            return
+        lines = []
+        for c in certs:
+            e = "✅" if c.estado == "vigente" else "⚠️"
+            lines.append(f"{e} *{c.tipo}* — {c.estado}\n   Vence: {c.fecha_vencimiento} · {c.organismo}")
+        await reply("🏅 *Tus certificaciones:*\n\n" + "\n\n".join(lines), md=True)
     finally:
         db.close()
 
 
-# ── MENÚ PRINCIPAL ─────────────────────────────────────────────────────────────
-
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto      = update.message.text.lower()
-    telegram_id = update.effective_user.id
-    usuario, productor = get_productor(telegram_id)
-
-    if not productor:
-        await update.message.reply_text("Escribe /start para registrarte primero.")
-        return ConversationHandler.END
-
-    # ── Cosecha ──
-    if "cosecha" in texto or texto.startswith("1"):
-        await update.message.reply_text(
-            "🌾 *Registrar cosecha*\n\n¿Qué producto cosechaste?",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(
-                [["1️⃣ Café", "2️⃣ Cacao"], ["3️⃣ Banano", "4️⃣ Otro"]],
-                resize_keyboard=True,
-            ),
-        )
-        return COSECHA_PRODUCTO
-
-    # ── Insumo ──
-    if "insumo" in texto or texto.startswith("2"):
-        await update.message.reply_text(
-            "🌿 *Registrar insumo*\n\n¿Qué insumo aplicaste?\n"
-            "Ej: Urea, Abono foliar, Fungicida Caldo Bordelés",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        return INSUMO_NOMBRE
-
-    # ── Despacho ──
-    if "despacho" in texto or texto.startswith("3"):
-        db = SessionLocal()
-        try:
-            lotes = db.query(Lote).filter(
-                Lote.productor_id == productor.id,
-                Lote.estado == EstadoLoteEnum.disponible,
-            ).all()
-            if not lotes:
-                await update.message.reply_text(
-                    "No tienes lotes disponibles para despachar.\n"
-                    "Registra una cosecha primero."
-                )
-                return MENU_PRINCIPAL
-            keyboard = [[l.id] for l in lotes]
-            await update.message.reply_text(
-                "🚢 *Registrar despacho*\n\n¿Cuál lote vas a despachar?",
-                parse_mode="Markdown",
-                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
-            )
-            return DESPACHO_LOTE
-        finally:
-            db.close()
-
-    # ── Ver lotes ──
-    if "lote" in texto or texto.startswith("4"):
-        db = SessionLocal()
-        try:
-            lotes = db.query(Lote).filter(Lote.productor_id == productor.id).all()
-            if not lotes:
-                await update.message.reply_text(
-                    "No tienes lotes registrados aún.\n"
-                    "Registra una cosecha para crear tu primer lote. 🌾"
-                )
-                return MENU_PRINCIPAL
-            estado_emoji = {"disponible": "✅", "reservado": "🔒", "vendido": "🤝", "despachado": "📤"}
-            msg = "📦 *Tus lotes:*\n\n"
-            for l in lotes:
-                emoji = estado_emoji.get(str(l.estado).split(".")[-1], "📦")
-                msg += f"{emoji} *{l.id}* — {l.producto}\n   {l.volumen_kg} kg · {l.estado}\n\n"
-            await update.message.reply_text(msg, parse_mode="Markdown")
-        finally:
-            db.close()
-        return MENU_PRINCIPAL
-
-    # ── Certificaciones ──
-    if "certif" in texto or texto.startswith("5"):
-        db = SessionLocal()
-        try:
-            certs = db.query(Certificacion).filter(
-                Certificacion.productor_id == productor.id
-            ).all()
-            if not certs:
-                await update.message.reply_text(
-                    "No tienes certificaciones registradas.\n"
-                    "Contacta al administrador para agregar tus certificaciones."
-                )
-                return MENU_PRINCIPAL
-            msg = "🏅 *Tus certificaciones:*\n\n"
-            for c in certs:
-                emoji = "✅" if c.estado == "vigente" else "⚠️"
-                msg += f"{emoji} *{c.tipo}*\n   Vence: {c.fecha_vencimiento}\n\n"
-            await update.message.reply_text(msg, parse_mode="Markdown")
-        finally:
-            db.close()
-        return MENU_PRINCIPAL
-
-    # ── Ventas ──
-    if "venta" in texto or texto.startswith("6"):
-        db = SessionLocal()
-        try:
-            estados_vendido = ["vendido", "despachado", "reservado"]
-            lotes = db.query(Lote).filter(
-                Lote.productor_id == productor.id,
-            ).all()
-            lotes_v = [l for l in lotes if str(l.estado).split(".")[-1] in estados_vendido]
-            if not lotes_v:
-                await update.message.reply_text("Aún no tienes ventas registradas.")
-                return MENU_PRINCIPAL
-            msg = "🤝 *Tus ventas:*\n\n"
-            for l in lotes_v:
-                msg += f"📦 *{l.id}* — {l.producto}\n   {l.volumen_kg} kg · {l.estado}\n\n"
-            await update.message.reply_text(msg, parse_mode="Markdown")
-        finally:
-            db.close()
-        return MENU_PRINCIPAL
-
-    # Opción no reconocida
-    await update.message.reply_text(
-        "No entendí esa opción. Usa el menú de botones 👇",
-        reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
-    )
-    return MENU_PRINCIPAL
-
-
-# ── COSECHA ────────────────────────────────────────────────────────────────────
-
-async def cosecha_producto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    opciones = {
-        "1️⃣ Café":   "Café pergamino",
-        "2️⃣ Cacao":  "Cacao seco",
-        "3️⃣ Banano": "Banano orgánico",
-        "4️⃣ Otro":   "Otro",
-    }
-    context.user_data["cosecha_producto"] = opciones.get(update.message.text, update.message.text)
-    await update.message.reply_text(
-        "¿Cuántos *kilogramos* cosechaste? Escribe solo el número. Ej: *120*",
-        parse_mode="Markdown",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return COSECHA_KG
-
-
-async def cosecha_kg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _mostrar_catalogo(reply):
+    db = _db()
     try:
-        context.user_data["cosecha_kg"] = float(
-            update.message.text.replace("kg", "").replace(",", ".").strip()
-        )
-    except ValueError:
-        await update.message.reply_text("Escribe solo el número. Ej: 120")
-        return COSECHA_KG
-    await update.message.reply_text(
-        "¿Qué *variedad*? Ej: Castillo, Caturra, CCN-51\n"
-        "Escribe *0* para omitir.",
-        parse_mode="Markdown",
-    )
-    return COSECHA_VARIEDAD
-
-
-async def cosecha_variedad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    val = update.message.text.strip()
-    context.user_data["cosecha_variedad"] = None if val == "0" else val
-    await update.message.reply_text(
-        "¿En cuál lote lo registramos?\n"
-        "Escribe el ID de un lote existente *o* escribe *NUEVO* para crear uno.",
-        parse_mode="Markdown",
-    )
-    return COSECHA_LOTE
-
-
-async def cosecha_lote(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id  = update.effective_user.id
-    usuario, prod = get_productor(telegram_id)
-    lote_input   = update.message.text.strip().upper()
-    fecha_hoy    = datetime.now().strftime("%Y-%m-%d")
-    db = SessionLocal()
-    try:
-        if lote_input == "NUEVO":
-            count    = db.query(Lote).count() + 1
-            lote_id  = f"L{datetime.now().year}-{count:03d}"
-            lote     = Lote(
-                id=lote_id,
-                productor_id=prod.id,
-                producto=context.user_data["cosecha_producto"],
-                variedad=context.user_data.get("cosecha_variedad"),
-                fecha_cosecha=fecha_hoy,
-                volumen_kg=context.user_data["cosecha_kg"],
-                estado=EstadoLoteEnum.disponible,
-                qr_url=f"https://magdalenatrace-nqwyqwmdy-mauricio-s-projects-ai.vercel.app/lote/{lote_id}",
-            )
-            db.add(lote)
-            db.flush()
-        else:
-            lote = db.query(Lote).filter(
-                Lote.id == lote_input,
-                Lote.productor_id == prod.id,
-            ).first()
-            if not lote:
-                await update.message.reply_text(
-                    f"No encontré el lote *{lote_input}*.\n"
-                    "Escribe NUEVO para crear uno o revisa el ID.",
-                    parse_mode="Markdown",
-                )
-                return COSECHA_LOTE
-            lote_id = lote.id
-
-        cte = CTE(
-            lote_id=lote_id,
-            tipo=TipoCTEEnum.cosecha,
-            fecha=fecha_hoy,
-            descripcion=f"Cosecha manual selectiva, {context.user_data['cosecha_kg']} kg",
-            responsable_id=usuario.id,
-        )
-        db.add(cte)
-        db.commit()
-
-        await update.message.reply_text(
-            f"✅ *¡Cosecha registrada!*\n\n"
-            f"📦 Lote: `{lote_id}`\n"
-            f"🌾 Producto: {context.user_data['cosecha_producto']}\n"
-            f"⚖️ Cantidad: {context.user_data['cosecha_kg']} kg\n"
-            f"📅 Fecha: {fecha_hoy}\n\n"
-            f"Trazabilidad pública:\n`vercel.app/lote/{lote_id}`",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
-        )
-        return MENU_PRINCIPAL
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error cosecha {telegram_id}: {e}")
-        await update.message.reply_text("⚠️ Error al guardar. Escribe /start e intenta de nuevo.")
-        return ConversationHandler.END
+        lotes = db.query(Lote).filter(Lote.estado == "disponible").all()
+        if not lotes:
+            await reply("📦 No hay lotes disponibles.", kb=True)
+            return
+        lines = []
+        for l in lotes[:10]:
+            v = l.productor.vereda if l.productor else "?"
+            lines.append(f"📦 *{l.id}* — {l.producto}\n   {l.volumen_kg} kg · ${l.precio_kg:,.0f}/kg · {v}")
+        t = f"📋 *Catálogo disponible:*\n\n" + "\n\n".join(lines)
+        if len(lotes) > 10:
+            t += f"\n\n... y {len(lotes) - 10} más."
+        await reply(t, md=True)
     finally:
         db.close()
 
 
-# ── INSUMO ─────────────────────────────────────────────────────────────────────
+async def button_handler(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    uid = update.effective_user.id
+    d = q.data
 
-async def insumo_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["insumo_nombre"] = update.message.text.strip()
-    await update.message.reply_text(
-        "¿Qué cantidad aplicaste? Ej: 2 bultos, 5 litros, 1 kg"
-    )
-    return INSUMO_CANTIDAD
+    async def edit(text: str, md=False, kb=False):
+        kw = {"parse_mode": "Markdown"} if md else {}
+        if kb:
+            kw["reply_markup"] = _menu_keyboard()
+        await q.edit_message_text(text, **kw)
 
+    kb_back = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="m_volver")]])
 
-async def insumo_cantidad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["insumo_cantidad"] = update.message.text.strip()
-    await update.message.reply_text(
-        "¿En cuál lote o área lo aplicaste?\n"
-        "Escribe el ID del lote. Ej: L2025-001"
-    )
-    return INSUMO_LOTE
-
-
-async def insumo_lote(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id   = update.effective_user.id
-    usuario, prod = get_productor(telegram_id)
-    lote_input    = update.message.text.strip().upper()
-    fecha_hoy     = datetime.now().strftime("%Y-%m-%d")
-    db = SessionLocal()
-    try:
-        lote = db.query(Lote).filter(
-            Lote.id == lote_input,
-            Lote.productor_id == prod.id,
-        ).first()
-
-        if lote:
-            cte = CTE(
-                lote_id=lote.id,
-                tipo=TipoCTEEnum.insumo,
-                fecha=fecha_hoy,
-                descripcion=(
-                    f"{context.user_data['insumo_nombre']} — "
-                    f"{context.user_data['insumo_cantidad']}"
-                ),
-                responsable_id=usuario.id,
-            )
-            db.add(cte)
-            db.commit()
-            msg_lote = f"asociado al lote `{lote.id}`"
-        else:
-            msg_lote = "(lote no encontrado, insumo guardado sin asociar)"
-
-        await update.message.reply_text(
-            f"✅ *Insumo registrado*\n\n"
-            f"🌿 Insumo: {context.user_data['insumo_nombre']}\n"
-            f"📦 Cantidad: {context.user_data['insumo_cantidad']}\n"
-            f"📅 Fecha: {fecha_hoy}\n"
-            f"🔗 {msg_lote}",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
+    if d == "m_cosecha":
+        _set_state(uid, ESTADO.COSECHA_PRODUCTO)
+        await edit("📦 *Registrar cosecha*\n\n¿Qué producto cosechaste?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Otro", md=True)
+    elif d == "m_insumo":
+        _set_state(uid, ESTADO.INSUMO_NOMBRE)
+        await edit("🌱 *Registrar insumo*\n\n¿Qué insumo aplicaste?", md=True)
+    elif d == "m_despacho":
+        _set_state(uid, ESTADO.DESPACHO_PRODUCTO)
+        await edit("🚚 *Registrar despacho*\n\n¿Qué producto despachaste?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Otro", md=True)
+    elif d == "m_lotes":
+        await _mostrar_lotes(uid, lambda t, md=False: edit(t, md=md, kb=True))
+    elif d == "m_certs":
+        await _mostrar_certs(uid, lambda t, md=False: edit(t, md=md, kb=True))
+    elif d == "m_catalogo":
+        await _mostrar_catalogo(lambda t, md=False: edit(t, md=md, kb=True))
+    elif d == "m_ayuda":
+        await edit(
+            "❓ *Ayuda*\n\n"
+            "/start — Iniciar\n"
+            "/menu — Menú principal\n"
+            "/cancelar — Cancelar operación\n\n"
+            "¿Problemas? Contacta al administrador.",
+            md=True, kb=True,
         )
-        return MENU_PRINCIPAL
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error insumo {telegram_id}: {e}")
-        await update.message.reply_text("⚠️ Error al guardar. Intenta de nuevo.")
-        return MENU_PRINCIPAL
-    finally:
-        db.close()
+    elif d == "m_volver":
+        _set_state(uid, ESTADO.MENU_PRINCIPAL)
+        await edit(MENU, md=True, kb=True)
 
 
-# ── DESPACHO ───────────────────────────────────────────────────────────────────
+async def handle_message(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    text = update.message.text.strip()
+    st = _state(uid)
+    d = _d(uid)
 
-async def despacho_lote(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["despacho_lote"] = update.message.text.strip().upper()
-    await update.message.reply_text(
-        "¿A quién le entregas el producto?\n"
-        "Nombre del transportista o empresa:",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return DESPACHO_TRANSPORTISTA
+    async def reply(text: str, md=False, kb=False):
+        kw = {"parse_mode": "Markdown"} if md else {}
+        if kb:
+            kw["reply_markup"] = _menu_keyboard()
+        await update.message.reply_text(text, **kw)
 
-
-async def despacho_transportista(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["despacho_transportista"] = update.message.text.strip()
-    await update.message.reply_text(
-        "¿Hacia dónde sale el producto?\nEj: Santa Marta, Barranquilla, Bogotá"
-    )
-    return DESPACHO_DESTINO
-
-
-async def despacho_destino(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id   = update.effective_user.id
-    usuario, prod = get_productor(telegram_id)
-    destino       = update.message.text.strip()
-    lote_id       = context.user_data["despacho_lote"]
-    fecha_hoy     = datetime.now().strftime("%Y-%m-%d")
-    db = SessionLocal()
-    try:
-        lote = db.query(Lote).filter(
-            Lote.id == lote_id,
-            Lote.productor_id == prod.id,
-        ).first()
-
-        if lote:
-            lote.estado = EstadoLoteEnum.despachado
-            cte = CTE(
-                lote_id=lote_id,
-                tipo=TipoCTEEnum.despacho,
-                fecha=fecha_hoy,
-                descripcion=(
-                    f"Despacho a {destino} vía "
-                    f"{context.user_data['despacho_transportista']}"
-                ),
-                responsable_id=usuario.id,
-            )
-            db.add(cte)
-            db.commit()
-
-        await update.message.reply_text(
-            f"✅ *Despacho registrado*\n\n"
-            f"📦 Lote: `{lote_id}`\n"
-            f"🚛 Transportista: {context.user_data['despacho_transportista']}\n"
-            f"📍 Destino: {destino}\n"
-            f"📅 Fecha: {fecha_hoy}\n\n"
-            "El lote queda marcado como *despachado*.",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
-        )
-        return MENU_PRINCIPAL
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error despacho {telegram_id}: {e}")
-        await update.message.reply_text("⚠️ Error al registrar. Intenta de nuevo.")
-        return MENU_PRINCIPAL
-    finally:
-        db.close()
-
-
-# ── CANCELAR ───────────────────────────────────────────────────────────────────
-
-async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Operación cancelada. ¿Qué deseas hacer?",
-        reply_markup=ReplyKeyboardMarkup(KEYBOARD_MENU, resize_keyboard=True),
-    )
-    return MENU_PRINCIPAL
-
-
-# ── run_bot() ──────────────────────────────────────────────────────────────────
-
-def run_bot():
-    """
-    Corre el bot de Telegram en su propio event loop.
-    Diseñado para ejecutarse en un thread secundario junto con FastAPI.
-    """
-    if not TOKEN:
-        logger.error("TELEGRAM_BOT_TOKEN no está definido. Bot no iniciado.")
+    tlow = text.lower()
+    if tlow in ("/menu", "menu", "0"):
+        _set_state(uid, ESTADO.MENU_PRINCIPAL)
+        await reply(MENU, md=True, kb=True)
+        return
+    if tlow in ("/cancelar", "cancelar"):
+        _set_state(uid, ESTADO.MENU_PRINCIPAL)
+        await reply("✅ Cancelado.", kb=True)
         return
 
-    async def _polling():
-        application = Application.builder().token(TOKEN).build()
+    # ── ESPERANDO_TELEFONO ─────────────────────────────────────────────────
+    if st == ESTADO.ESPERANDO_TELEFONO:
+        tel = text.replace(" ", "").replace("-", "").replace("+", "")
+        if not tel.isdigit() or len(tel) < 10:
+            await reply("⚠️ Número inválido. Formato: `57300XXXXXXX`", md=True)
+            return
+        d["telefono"] = tel
+        db = _db()
+        try:
+            u = db.query(Usuario).filter(Usuario.telefono == tel).first()
+            if u and u.rol == RolEnum.productor:
+                p = db.query(Productor).filter(Productor.usuario_id == u.id).first()
+                d["nombre"] = u.nombre_completo
+                d["productor_id"] = p.id if p else None
+                d["usuario_id"] = u.id
+                _set_state(uid, ESTADO.MENU_PRINCIPAL)
+                await reply(f"👋 ¡Bienvenido de nuevo, *{u.nombre_completo}*!\n\n{MENU}", md=True, kb=True)
+            else:
+                _set_state(uid, ESTADO.REGISTRO_NOMBRE)
+                await reply("🌾 No estás registrado. Vamos a crear tu perfil.\n\n¿Cuál es tu *nombre completo*?", md=True)
+        finally:
+            db.close()
+        return
 
-        conv = ConversationHandler(
-            entry_points=[CommandHandler("start", start)],
-            states={
-                MENU_PRINCIPAL:        [MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler)],
-                REG_NOMBRE:            [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_nombre)],
-                REG_FINCA:             [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_finca)],
-                REG_VEREDA:            [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_vereda)],
-                REG_PRODUCTO:          [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_producto)],
-                REG_ALTITUD:           [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_altitud)],
-                COSECHA_PRODUCTO:      [MessageHandler(filters.TEXT & ~filters.COMMAND, cosecha_producto)],
-                COSECHA_KG:            [MessageHandler(filters.TEXT & ~filters.COMMAND, cosecha_kg)],
-                COSECHA_VARIEDAD:      [MessageHandler(filters.TEXT & ~filters.COMMAND, cosecha_variedad)],
-                COSECHA_LOTE:          [MessageHandler(filters.TEXT & ~filters.COMMAND, cosecha_lote)],
-                INSUMO_NOMBRE:         [MessageHandler(filters.TEXT & ~filters.COMMAND, insumo_nombre)],
-                INSUMO_CANTIDAD:       [MessageHandler(filters.TEXT & ~filters.COMMAND, insumo_cantidad)],
-                INSUMO_LOTE:           [MessageHandler(filters.TEXT & ~filters.COMMAND, insumo_lote)],
-                DESPACHO_LOTE:         [MessageHandler(filters.TEXT & ~filters.COMMAND, despacho_lote)],
-                DESPACHO_TRANSPORTISTA:[MessageHandler(filters.TEXT & ~filters.COMMAND, despacho_transportista)],
-                DESPACHO_DESTINO:      [MessageHandler(filters.TEXT & ~filters.COMMAND, despacho_destino)],
-            },
-            fallbacks=[CommandHandler("cancelar", cancelar)],
-        )
-        application.add_handler(conv)
+    # ── REGISTRO ───────────────────────────────────────────────────────────
+    if st == ESTADO.REGISTRO_NOMBRE:
+        d["nombre"] = text
+        _set_state(uid, ESTADO.REGISTRO_FINCA)
+        await reply("🌱 ¿Cómo se llama tu *finca*?", md=True)
+        return
 
-        logger.info("🤖 Bot MagdalenaTrace iniciando polling en Telegram...")
-        async with application:
-            await application.start()
-            await application.updater.start_polling(drop_pending_updates=True)
-            # Mantener el bot activo hasta que el thread sea cancelado
-            await asyncio.Event().wait()
+    if st == ESTADO.REGISTRO_FINCA:
+        d["finca"] = text
+        _set_state(uid, ESTADO.REGISTRO_VEREDA)
+        await reply("📍 ¿En qué *vereda* está tu finca?", md=True)
+        return
 
-    # Event loop propio para el thread (evita conflictos con el loop de uvicorn)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(_polling())
-    except Exception as e:
-        logger.error(f"Bot Telegram error: {e}")
-    finally:
-        loop.close()
+    if st == ESTADO.REGISTRO_VEREDA:
+        d["vereda"] = text
+        _set_state(uid, ESTADO.REGISTRO_PRODUCTOS)
+        await reply("🌿 ¿Qué cultivos tienes?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Varios")
+        return
+
+    if st == ESTADO.REGISTRO_PRODUCTOS:
+        d["productos"] = PROD_REG_MAP.get(text, text.lower())
+        _set_state(uid, ESTADO.REGISTRO_ALTITUD)
+        await reply("⛰️ ¿Altitud de tu finca? (msnm, ej: 1200)")
+        return
+
+    if st == ESTADO.REGISTRO_ALTITUD:
+        alt = 0
+        try:
+            alt = int(text)
+        except ValueError:
+            pass
+        d["altitud"] = alt
+        db = _db()
+        try:
+            def _df(c):
+                return round(c + random.uniform(-0.01, 0.01), 6) if c else None
+
+            u = Usuario(telefono=d["telefono"], nombre_completo=d["nombre"],
+                        rol=RolEnum.productor, activo=True, aprobado=True)
+            db.add(u)
+            db.flush()
+            p = Productor(usuario_id=u.id, finca=d["finca"], vereda=d["vereda"],
+                          municipio="Santa Marta", altitud_msnm=alt, productos=d["productos"])
+            db.add(p)
+            db.commit()
+            db.refresh(p)
+            d["productor_id"] = p.id
+            d["usuario_id"] = u.id
+            _set_state(uid, ESTADO.MENU_PRINCIPAL)
+            await reply(
+                f"✅ *¡Registrado!*\n\n"
+                f"👤 {d['nombre']}\n🌱 {d['finca']} · {d['vereda']}\n"
+                f"🌿 {d['productos']} · {alt} m\n\n{MENU}",
+                md=True, kb=True,
+            )
+        except Exception as e:
+            db.rollback()
+            await reply(f"❌ Error: {e}. Usa /start para reiniciar.")
+        finally:
+            db.close()
+        return
+
+    # ── MENU_PRINCIPAL (texto) ─────────────────────────────────────────────
+    if st == ESTADO.MENU_PRINCIPAL:
+        if text == "1":
+            _set_state(uid, ESTADO.COSECHA_PRODUCTO)
+            await reply("📦 ¿Qué producto cosechaste?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Otro")
+        elif text == "2":
+            _set_state(uid, ESTADO.INSUMO_NOMBRE)
+            await reply("🌱 ¿Qué insumo aplicaste?")
+        elif text == "3":
+            _set_state(uid, ESTADO.DESPACHO_PRODUCTO)
+            await reply("🚚 ¿Qué producto despachaste?\n\n1️⃣ Café\n2️⃣ Cacao\n3️⃣ Banano\n4️⃣ Otro")
+        elif text == "4":
+            await _mostrar_lotes(uid, lambda t, md=False: reply(t, md=md))
+        elif text == "5":
+            await _mostrar_certs(uid, lambda t, md=False: reply(t, md=md))
+        elif text == "6":
+            await _mostrar_catalogo(lambda t, md=False: reply(t, md=md))
+        else:
+            await reply("⚠️ Opción inválida. Usa /menu para ver opciones.")
+        return
+
+    # ── COSECHA ────────────────────────────────────────────────────────────
+    if st == ESTADO.COSECHA_PRODUCTO:
+        d["cosecha"] = {"producto": PROD_MAP.get(text, text.lower())}
+        _set_state(uid, ESTADO.COSECHA_KG)
+        await reply("📦 ¿Cuántos kg?")
+        return
+
+    if st == ESTADO.COSECHA_KG:
+        d.setdefault("cosecha", {})["kg"] = text
+        _set_state(uid, ESTADO.COSECHA_VARIEDAD)
+        await reply("🌱 ¿Variedad? (0 para omitir)")
+        return
+
+    if st == ESTADO.COSECHA_VARIEDAD:
+        d.setdefault("cosecha", {})["variedad"] = "" if text == "0" else text
+        _set_state(uid, ESTADO.COSECHA_LOTE)
+        await reply("🔢 ¿Lote? (ej: L2025-001)")
+        return
+
+    if st == ESTADO.COSECHA_LOTE:
+        c = d.get("cosecha", {})
+        lid = text.upper()
+        desc = f"Cosecha {c.get('producto', '?')} — {c.get('kg', '?')} kg"
+        if c.get("variedad"):
+            desc += f" · {c['variedad']}"
+        db = _db()
+        try:
+            hoy = date.today().isoformat()
+            db.add(CTE(lote_id=lid, tipo=TipoCTEEnum.cosecha, fecha=hoy,
+                       descripcion=desc, responsable_id=d.get("usuario_id"), datos_json="{}"))
+            db.commit()
+            await reply(f"✅ *Cosecha registrada*\n\n{c.get('kg', '?')} kg de {c.get('producto', '?')}\nLote: {lid}\n📅 {hoy}", md=True, kb=True)
+        except Exception as e:
+            await reply(f"❌ Error: {e}")
+        finally:
+            db.close()
+        _set_state(uid, ESTADO.MENU_PRINCIPAL)
+        return
+
+    # ── INSUMO ─────────────────────────────────────────────────────────────
+    if st == ESTADO.INSUMO_NOMBRE:
+        d["insumo"] = {"nombre": text}
+        _set_state(uid, ESTADO.INSUMO_CANTIDAD)
+        await reply("🌱 ¿Cantidad y unidad? (ej: 5 litros)")
+        return
+
+    if st == ESTADO.INSUMO_CANTIDAD:
+        d.setdefault("insumo", {})["cantidad"] = text
+        _set_state(uid, ESTADO.INSUMO_LOTE)
+        await reply("🔢 ¿Lote? (ej: L2025-001)")
+        return
+
+    if st == ESTADO.INSUMO_LOTE:
+        ins = d.get("insumo", {})
+        lid = text.upper()
+        desc = f"Insumo: {ins.get('nombre', '?')} — {ins.get('cantidad', '?')}"
+        db = _db()
+        try:
+            hoy = date.today().isoformat()
+            db.add(CTE(lote_id=lid, tipo=TipoCTEEnum.insumo, fecha=hoy,
+                       descripcion=desc, responsable_id=d.get("usuario_id"), datos_json="{}"))
+            db.commit()
+            await reply(f"✅ *Insumo registrado*\n\n{ins.get('nombre', '?')} — {ins.get('cantidad', '?')}\nLote: {lid}", md=True, kb=True)
+        except Exception as e:
+            await reply(f"❌ Error: {e}")
+        finally:
+            db.close()
+        _set_state(uid, ESTADO.MENU_PRINCIPAL)
+        return
+
+    # ── DESPACHO ───────────────────────────────────────────────────────────
+    if st == ESTADO.DESPACHO_PRODUCTO:
+        d["despacho"] = {"producto": PROD_MAP.get(text, text.lower())}
+        _set_state(uid, ESTADO.DESPACHO_KG)
+        await reply("🚚 ¿Cuántos kg?")
+        return
+
+    if st == ESTADO.DESPACHO_KG:
+        d.setdefault("despacho", {})["kg"] = text
+        _set_state(uid, ESTADO.DESPACHO_LOTE)
+        await reply("🔢 ¿De qué lote?")
+        return
+
+    if st == ESTADO.DESPACHO_LOTE:
+        dp = d.get("despacho", {})
+        lid = text.upper()
+        desc = f"Despacho {dp.get('producto', '?')} — {dp.get('kg', '?')} kg"
+        db = _db()
+        try:
+            hoy = date.today().isoformat()
+            db.add(CTE(lote_id=lid, tipo=TipoCTEEnum.despacho, fecha=hoy,
+                       descripcion=desc, responsable_id=d.get("usuario_id"), datos_json="{}"))
+            lote = db.query(Lote).filter(Lote.id == lid).first()
+            if lote:
+                lote.estado = EstadoLoteEnum.despachado
+            db.commit()
+            await reply(f"✅ *Despacho registrado*\n\n{dp.get('kg', '?')} kg de {dp.get('producto', '?')}\nLote: {lid}", md=True, kb=True)
+        except Exception as e:
+            await reply(f"❌ Error: {e}")
+        finally:
+            db.close()
+        _set_state(uid, ESTADO.MENU_PRINCIPAL)
+        return
+
+    # ── fallback ──────────────────────────────────────────────────────────
+    await reply("⚠️ No entendí. Usa /menu para ver opciones.")
 
 
-if __name__ == "__main__":
-    run_bot()
+def run_bot():
+    """Llamado desde main.py en thread daemon."""
+    if not TOKEN:
+        logger.error("TELEGRAM_BOT_TOKEN no configurado — bot no iniciado")
+        return
+
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", cmd_menu))
+    app.add_handler(CommandHandler("cancelar", cmd_cancelar))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    logger.info("Bot de Telegram iniciando polling...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
