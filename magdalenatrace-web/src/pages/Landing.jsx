@@ -296,7 +296,7 @@ function HowItWorks() {
             color: 'var(--verde-sierra)',
             marginBottom: 14,
           }}>
-            Una cadena. Tres actores. Un sistema.
+            Una cadena. Cuatro actores. Un sistema.
           </h2>
           <p style={{ color: 'var(--texto-medio)', fontSize: 17, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
             Cada rol tiene su portal. Todos comparten la misma trazabilidad.
