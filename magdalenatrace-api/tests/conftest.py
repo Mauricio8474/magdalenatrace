@@ -2,7 +2,7 @@ import os
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["TELEGRAM_BOT_TOKEN"] = ""
 os.environ["SECRET_KEY"] = "test-secret-key-2026"
-os.environ["GEMINI_API_KEY"] = "test-key"
+os.environ["GROQ_API_KEY"] = "test-key"
 
 import pytest
 from fastapi.testclient import TestClient

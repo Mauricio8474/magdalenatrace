@@ -1,26 +1,25 @@
 """
-routers/chatbot.py — Asistente IA con Google Gemini
+routers/chatbot.py — Asistente IA con Groq (LLaMA 3 70B via OpenAI API)
 Detecta: [VIZ:mapa] | [VIZ:tabla] | [VIZ:certs] en la respuesta del modelo
-Anti promt injection: system_instruction de Gemini, dominio restringido
+Anti prompt injection: system message restringe dominio
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas import ChatbotRequest, ChatbotResponse
 from models import Lote, Productor, Certificacion
+from openai import OpenAI
 import os
 
 router = APIRouter()
 
-# Se llena desde main.py startup (Railway inyecta env vars despues de import)
-GEMINI_API_KEY = ""
+GROQ_API_KEY = ""
 
 
 def init_api_key():
-    """Llamado desde main.py startup — Railway inyecta env vars tarde."""
-    global GEMINI_API_KEY
-    GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
-    print(f"[CHATBOT] 🔑 init_api_key: exists={bool(GEMINI_API_KEY)} len={len(GEMINI_API_KEY)} prefix={GEMINI_API_KEY[:8] or 'NONE'}", flush=True)
+    global GROQ_API_KEY
+    GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
+    print(f"[CHATBOT] init_api_key: exists={bool(GROQ_API_KEY)} len={len(GROQ_API_KEY)}", flush=True)
 
 
 SYSTEM_INSTRUCTION = """Eres el asistente oficial de MagdalenaTrace, una plataforma de trazabilidad agrícola de la Sierra Nevada de Santa Marta, Colombia.
@@ -60,31 +59,20 @@ def _detectar_viz(texto: str, db: Session):
         texto = texto.replace("[VIZ:mapa]", "").strip()
         productores = db.query(Productor).all()
         datos_viz = [
-            {
-                "id": p.id,
-                "finca": p.finca,
-                "vereda": p.vereda,
-                "lat": p.lat_aproximada,
-                "lng": p.lng_aproximada,
-                "productos": p.productos,
-                "altitud_msnm": p.altitud_msnm,
-            }
-            for p in productores
-            if p.lat_aproximada and p.lng_aproximada
+            {"id": p.id, "finca": p.finca, "vereda": p.vereda,
+             "lat": p.lat_aproximada, "lng": p.lng_aproximada,
+             "productos": p.productos, "altitud_msnm": p.altitud_msnm}
+            for p in productores if p.lat_aproximada and p.lng_aproximada
         ]
     elif "[VIZ:tabla]" in texto:
         tipo_viz = "tabla"
         texto = texto.replace("[VIZ:tabla]", "").strip()
         lotes = db.query(Lote).filter(Lote.estado == "disponible").all()
         datos_viz = [
-            {
-                "id": l.id,
-                "producto": l.producto,
-                "variedad": l.variedad,
-                "volumen_kg": l.volumen_kg,
-                "vereda": l.productor.vereda if l.productor else None,
-                "altitud_msnm": l.productor.altitud_msnm if l.productor else None,
-            }
+            {"id": l.id, "producto": l.producto, "variedad": l.variedad,
+             "volumen_kg": l.volumen_kg,
+             "vereda": l.productor.vereda if l.productor else None,
+             "altitud_msnm": l.productor.altitud_msnm if l.productor else None}
             for l in lotes
         ]
     elif "[VIZ:certs]" in texto:
@@ -92,13 +80,8 @@ def _detectar_viz(texto: str, db: Session):
         texto = texto.replace("[VIZ:certs]", "").strip()
         certs = db.query(Certificacion).all()
         datos_viz = [
-            {
-                "tipo": c.tipo,
-                "estado": c.estado,
-                "numero_cert": c.numero_cert,
-                "fecha_vencimiento": c.fecha_vencimiento,
-                "organismo": c.organismo,
-            }
+            {"tipo": c.tipo, "estado": c.estado, "numero_cert": c.numero_cert,
+             "fecha_vencimiento": c.fecha_vencimiento, "organismo": c.organismo}
             for c in certs
         ]
 
@@ -107,48 +90,30 @@ def _detectar_viz(texto: str, db: Session):
 
 @router.post("/mensaje", response_model=ChatbotResponse, summary="Chat con el asistente de MagdalenaTrace")
 def chatbot_mensaje(body: ChatbotRequest, db: Session = Depends(get_db)):
-    # Lee directo de os.environ por si Railway inyecta en cualquier momento
-    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
-    print(f"[CHATBOT] 💬 mensaje: os.environ key exists={bool(api_key)} len={len(api_key)} prefix={api_key[:8] or 'NONE'}", flush=True)
+    api_key = GROQ_API_KEY or (os.environ.get("GROQ_API_KEY") or "").strip()
     if not api_key:
-        if GEMINI_API_KEY:
-            api_key = GEMINI_API_KEY
-            print(f"[CHATBOT] 💬 fallback a GEMINI_API_KEY module var: exists=True len={len(api_key)}", flush=True)
-    if not api_key or api_key == "tu_api_key_aqui":
         return {
-            "respuesta": (
-                "El asistente está en modo demo. "
-                f"[DEBUG] GEMINI_API_KEY exists={bool(api_key)} len={len(api_key)} prefix={api_key[:8] or 'NONE'}. "
-                "Configura GEMINI_API_KEY en Railway → Variables y redeploya."
-            ),
+            "respuesta": "El asistente no está disponible. Configura GROQ_API_KEY en Railway.",
             "tipo_viz": "texto",
             "datos_viz": None,
         }
 
     try:
-        import google.generativeai as genai
+        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
-            system_instruction=SYSTEM_INSTRUCTION,
-        )
-
-        contents = []
+        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
         for h in body.historial:
-            role = "user" if h.rol == "user" else "model"
-            contents.append({"role": role, "parts": [h.contenido]})
-        contents.append({"role": "user", "parts": [body.mensaje]})
+            messages.append({"role": h.rol, "content": h.contenido})
+        messages.append({"role": "user", "content": body.mensaje})
 
-        response = model.generate_content(
-            contents,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=1024,
-                temperature=0.4,
-            ),
+        response = client.chat.completions.create(
+            model="llama3-70b-8192",
+            messages=messages,
+            max_tokens=1024,
+            temperature=0.4,
         )
 
-        respuesta_texto = response.text
+        respuesta_texto = response.choices[0].message.content
         respuesta_texto, tipo_viz, datos_viz = _detectar_viz(respuesta_texto, db)
 
         return {"respuesta": respuesta_texto, "tipo_viz": tipo_viz, "datos_viz": datos_viz}

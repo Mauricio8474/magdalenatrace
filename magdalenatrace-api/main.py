@@ -56,7 +56,7 @@ def startup():
     print(f"  CWD: {os.getcwd()}", flush=True)
     print("=" * 60, flush=True)
 
-    # 0. Inicializar API key del chatbot (Railway inyecta tarde)
+    # 0. Inicializar API key del chatbot (Groq)
     chatbot.init_api_key()
 
     # 1. Crear tablas nuevas (Reserva, etc.)
@@ -105,12 +105,12 @@ def root():
 
 @app.get("/debug/env")
 def debug_env():
-    gemini = os.getenv("GEMINI_API_KEY", "")
+    groq = os.getenv("GROQ_API_KEY", "")
     telegram = os.getenv("TELEGRAM_BOT_TOKEN", "")
     return {
-        "GEMINI_API_KEY_exists": bool(gemini),
-        "GEMINI_API_KEY_len": len(gemini),
-        "GEMINI_API_KEY_prefix": gemini[:12] if gemini else "NONE",
+        "GROQ_API_KEY_exists": bool(groq),
+        "GROQ_API_KEY_len": len(groq),
+        "GROQ_API_KEY_prefix": groq[:12] if groq else "NONE",
         "TELEGRAM_BOT_TOKEN_exists": bool(telegram),
         "TELEGRAM_BOT_TOKEN_len": len(telegram),
         "all_env_keys": sorted([k for k in os.environ.keys() if not k.startswith("_")]),
