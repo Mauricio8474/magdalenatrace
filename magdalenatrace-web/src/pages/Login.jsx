@@ -74,9 +74,10 @@ export default function Login() {
   }
 
   const DEMOS = [
-    { label: 'Exportador', email: 'exportador@sierraexporta.co', pass: 'exporta2026', color: 'var(--verde-sierra)' },
-    { label: 'Turista',    email: 'tourist@example.com',          pass: 'travel2026',  color: 'var(--azul-caribe)' },
-    { label: 'Admin',      email: 'admin@magdalenatrace.co',      pass: 'admin2026',   color: 'var(--cafe-medio)' },
+    { label: 'Exportador', email: 'exportador@sierraexporta.co',   pass: 'exporta2026', color: 'var(--verde-sierra)' },
+    { label: 'Turista',    email: 'tourist@example.com',            pass: 'travel2026',  color: 'var(--azul-caribe)' },
+    { label: 'Operador',   email: 'operador@sierraaventura.co',    pass: 'tours2026',   color: '#0077B6' },
+    { label: 'Admin',      email: 'admin@magdalenatrace.co',        pass: 'admin2026',   color: 'var(--cafe-medio)' },
   ]
 
   const formPanel = (
@@ -243,10 +244,10 @@ export default function Login() {
           </p>
 
           {[
-            { icon: '🌿', role: 'Exportador',          desc: 'Catálogo, órdenes y trazabilidad' },
-            { icon: '🗺️', role: 'Turista / Comprador', desc: 'Explorar fincas y experiencias' },
-            { icon: '🏕️', role: 'Operador Turístico',  desc: 'Gestionar agroturismo certificado' },
-            { icon: '🌱', role: 'Productor',            desc: 'Bot WhatsApp — sin cuenta web', whatsapp: true },
+            { icon: '📊', role: 'Exportador',          desc: 'Accede al catálogo de lotes certificados' },
+            { icon: '🗺️', role: 'Turista / Comprador', desc: 'Descubre el origen de lo que consumes' },
+            { icon: '🏕️', role: 'Operador Turístico',  desc: 'Gestiona tus experiencias de agroturismo' },
+            { icon: '🌱', role: 'Productor',            desc: 'Vía WhatsApp — sin login web', whatsapp: true },
           ].map(r => (
             <div key={r.role} style={{
               display: 'flex', alignItems: 'center', gap: 12,

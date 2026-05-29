@@ -172,6 +172,7 @@ export default function Registro() {
   const [serviciosSeleccionados, setServiciosSeleccionados] = useState([])
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState('')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
 
   useEffect(() => {
@@ -210,11 +211,15 @@ export default function Registro() {
         },
       }
       const { data } = await api.post(endpointMap[rol], bodyMap[rol])
-      if (data.access_token) {
+
+      if (rol === 'operador') {
+        // Operador aprobado automáticamente: mostrar mensaje y redirigir a login
+        setSuccess('✅ Cuenta creada exitosamente. Ya puedes iniciar sesión.')
+        setTimeout(() => navigate('/login'), 2000)
+      } else if (data.access_token) {
         localStorage.setItem('token', data.access_token)
         localStorage.setItem('user', JSON.stringify({ rol: data.rol, nombre: data.nombre, id: data.id }))
         if (data.rol === 'exportador') navigate('/exportador')
-        else if (data.rol === 'operador_turistico') navigate('/operador')
         else navigate('/mapa')
       } else {
         navigate('/login?msg=registro_ok')
@@ -253,8 +258,32 @@ export default function Registro() {
         Elige tu tipo de cuenta para comenzar
       </p>
 
+      {/* Pantalla de éxito */}
+      {success && (
+        <div style={{
+          textAlign: 'center', padding: '24px 0',
+          animation: 'slideUp 0.4s ease',
+        }}>
+          <div style={{ fontSize: 56, marginBottom: 14 }}>🏕️</div>
+          <h3 style={{ fontFamily: 'var(--font-titulo)', fontSize: 22, color: 'var(--verde-sierra)', marginBottom: 10 }}>
+            ¡Bienvenido a MagdalenaTrace!
+          </h3>
+          <div style={{
+            background: '#D1FAE5', color: '#065F46',
+            border: '1px solid #6EE7B7',
+            borderRadius: 10, padding: '14px 16px',
+            fontSize: 14, fontWeight: 500, marginBottom: 16,
+          }}>
+            {success}
+          </div>
+          <p style={{ fontSize: 12, color: '#9CA3AF', animation: 'pulse 1.5s ease infinite' }}>
+            Redirigiendo al login…
+          </p>
+        </div>
+      )}
+
       {/* Role selector — 3 cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginBottom: 16 }}>
+      <div style={{ display: success ? 'none' : 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginBottom: 16 }}>
         {ROLES.map(r => {
           const active = rol === r.value
           return (
@@ -281,14 +310,15 @@ export default function Registro() {
         color: selectedRol?.accent || 'var(--verde-sierra)',
         borderRadius: 8, padding: '8px 12px',
         fontSize: 12, marginBottom: 20,
-        display: 'flex', alignItems: 'center', gap: 6,
+        alignItems: 'center', gap: 6,
         border: `1px solid ${selectedRol?.accent || 'var(--verde-sierra)'}22`,
+        display: success ? 'none' : 'flex',
       }}>
         <span>{selectedRol?.icon}</span>
         <span>{selectedRol?.desc}</span>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <form onSubmit={handleSubmit} style={{ display: success ? 'none' : 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Exportador & Turista: generic field rendering */}
         {rol !== 'operador' && FIELD_SETS[rol].map(({ label, key, type, required, placeholder }) => (
           <div key={key}>
